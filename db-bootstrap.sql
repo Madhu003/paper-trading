@@ -1,0 +1,8 @@
+-- Paper Trading: the API now uses MongoDB (not PostgreSQL).
+--
+-- Collections are created implicitly. On first backend start, the app ensures:
+--   - database: MONGODB_DB (default: paper_trading)
+--   - collection: users
+--   - unique indexes on users.email and users.username
+--
+-- Set MONGODB_URI in backend/.env (see backend/.env.example).
