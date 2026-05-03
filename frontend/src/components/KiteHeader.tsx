@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 import { MarketSessionBadge } from '@/components/MarketSessionBadge';
 import { Badge } from '@/components/ui/badge';
@@ -9,15 +9,22 @@ import type { StockData } from '@/types';
 
 type NavKey = 'dashboard' | 'orders' | 'holdings' | 'funds';
 
+function activeNavKey(pathname: string): NavKey {
+  if (pathname.startsWith('/orders')) return 'orders';
+  if (pathname.startsWith('/holdings')) return 'holdings';
+  if (pathname.startsWith('/funds')) return 'funds';
+  return 'dashboard';
+}
+
 type Props = {
-  active: NavKey;
   status: 'connecting' | 'live' | 'offline';
   nifty?: StockData | null;
-  /** When true, show Sign out in the header (e.g. same as having a stored token). */
-  signedIn?: boolean;
 };
 
-export function KiteHeader({ active, status, nifty, signedIn = false }: Props) {
+export function KiteHeader({ status, nifty }: Props) {
+  const { pathname } = useLocation();
+  const active = activeNavKey(pathname);
+
   const nav = (to: string, key: NavKey, label: string) => (
     <Link
       to={to}
@@ -73,17 +80,15 @@ export function KiteHeader({ active, status, nifty, signedIn = false }: Props) {
           <Badge variant="outline" className="hidden font-normal sm:inline-flex">
             Live: {status}
           </Badge>
-          {signedIn ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
-              onClick={signOut}
-            >
-              Sign out
-            </Button>
-          ) : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+            onClick={signOut}
+          >
+            Sign out
+          </Button>
         </nav>
       </div>
     </header>

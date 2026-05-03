@@ -1,38 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { useOutletContext } from 'react-router-dom';
 import { Search, Briefcase, Clock, Droplets, Settings } from 'lucide-react';
 
-import { KiteHeader } from '@/components/KiteHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { setAuthToken } from '@/lib/api';
-import { fetchMe, fetchPortfolio, fetchStocks } from '@/lib/queries';
-import { getSocket } from '@/lib/socket';
+import type { AppOutletContext } from '@/layouts/types';
+import { formatInr } from '@/lib/format';
+import { pickNifty, sortTopStocks, symbolShort } from '@/lib/marketDisplay';
+import { fetchMe, fetchPortfolio } from '@/lib/queries';
 import { cn } from '@/lib/utils';
-import type { StockData } from '@/types';
-
-function pickNifty(stocks: StockData[]) {
-  return stocks.find((s) => s.symbol === '^NSEI' || s.name?.toLowerCase().includes('nifty')) ?? null;
-}
-
-function sortTop(stocks: StockData[]) {
-  return [...stocks]
-    .filter((s) => s.symbol !== '^NSEI')
-    .sort((a, b) => (b.price ?? 0) - (a.price ?? 0))
-    .slice(0, 20);
-}
-
-function formatInr(n: number) {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
-}
-
-function symbolShort(s: string) {
-  return s.replace('.NS', '').replace('^NSEI', 'NIFTY');
-}
 
 function pseudo01(seed: number, i: number) {
   const x = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453;
@@ -40,38 +21,23 @@ function pseudo01(seed: number, i: number) {
 }
 
 export function Dashboard() {
-  const queryClient = useQueryClient();
-  const [streamStocks, setStreamStocks] = useState<StockData[] | undefined>(undefined);
+  const { stocks, stocksQuery } = useOutletContext<AppOutletContext>();
   const [watchQuery, setWatchQuery] = useState('');
-  const [status, setStatus] = useState<'connecting' | 'live' | 'offline'>('connecting');
-  const [hasToken] = useState(() => !!localStorage.getItem('token'));
-
-  const stocksQuery = useQuery({
-    queryKey: ['stocks'],
-    queryFn: fetchStocks,
-    staleTime: 5_000,
-    retry: 1,
-  });
 
   const meQuery = useQuery({
     queryKey: ['me'],
     queryFn: fetchMe,
-    enabled: hasToken,
     staleTime: 15_000,
   });
 
   const portfolioQuery = useQuery({
     queryKey: ['portfolio'],
     queryFn: fetchPortfolio,
-    enabled: hasToken,
     staleTime: 10_000,
   });
 
-  const queryStocks = stocksQuery.data;
-  const stocks = useMemo(() => streamStocks ?? queryStocks ?? [], [streamStocks, queryStocks]);
-
   const nifty = useMemo(() => pickNifty(stocks), [stocks]);
-  const top20 = useMemo(() => sortTop(stocks), [stocks]);
+  const top20 = useMemo(() => sortTopStocks(stocks, 20), [stocks]);
 
   const priceMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -94,33 +60,6 @@ export function Dashboard() {
     const pnlPct = investment > 0 ? (pnl / investment) * 100 : 0;
     return { investment, current, pnl, pnlPct, count: rows.length };
   }, [portfolioQuery.data, priceMap]);
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    setAuthToken(token);
-  }, []);
-
-  useEffect(() => {
-    const socket = getSocket();
-    const onConnect = () => setStatus('live');
-    const onDisconnect = () => setStatus('offline');
-    const onStockUpdates = (payload: StockData[]) => setStreamStocks(payload);
-    const onOrdersChanged = () => {
-      void queryClient.invalidateQueries({ queryKey: ['portfolio'] });
-      void queryClient.invalidateQueries({ queryKey: ['me'] });
-      void queryClient.invalidateQueries({ queryKey: ['orders'] });
-    };
-    socket.on('connect', onConnect);
-    socket.on('disconnect', onDisconnect);
-    socket.on('stockUpdates', onStockUpdates);
-    socket.on('ordersChanged', onOrdersChanged);
-    return () => {
-      socket.off('connect', onConnect);
-      socket.off('disconnect', onDisconnect);
-      socket.off('stockUpdates', onStockUpdates);
-      socket.off('ordersChanged', onOrdersChanged);
-    };
-  }, [queryClient]);
 
   const watchlistItems = useMemo(() => {
     const list = stocks.filter((s) => s.symbol !== '^NSEI');
@@ -220,236 +159,232 @@ export function Dashboard() {
   const cashBalance = meQuery.data?.balance ?? 0;
 
   return (
-    <div className="min-h-screen bg-background">
-      <KiteHeader active="dashboard" status={status} nifty={nifty} signedIn={hasToken} />
-
-      <div className="mx-auto flex max-w-[1600px]">
-        <aside className="hidden w-[280px] shrink-0 border-r bg-card lg:flex lg:flex-col">
-          <div className="border-b p-3">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-              <Input
-                placeholder="Search eg: infy, reliance, nifty"
-                className="pl-9"
-                value={watchQuery}
-                onChange={(e) => setWatchQuery(e.target.value)}
-              />
-            </div>
+    <div className="mx-auto flex max-w-[1600px]">
+      <aside className="hidden w-[280px] shrink-0 border-r bg-card lg:flex lg:flex-col">
+        <div className="border-b p-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+            <Input
+              placeholder="Search eg: infy, reliance, nifty"
+              className="pl-9"
+              value={watchQuery}
+              onChange={(e) => setWatchQuery(e.target.value)}
+            />
           </div>
-          <ScrollArea className="h-[calc(100vh-3rem)]">
-            <div className="p-1">
-              {stocksQuery.isError ? (
-                <p className="px-3 py-2 text-sm text-destructive">Could not load market data.</p>
-              ) : null}
-              {watchlistItems.map((s) => {
-                const up = (s.change ?? 0) >= 0;
-                return (
-                  <button
-                    key={s.symbol}
-                    type="button"
-                    className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-muted/80"
-                  >
-                    <span className="flex items-center gap-2 font-medium">
-                      {symbolShort(s.symbol)}
-                      {s.symbol === 'INFY.NS' ? (
-                        <Briefcase className="size-3.5 text-muted-foreground" aria-hidden />
-                      ) : null}
+        </div>
+        <ScrollArea className="h-[calc(100vh-3rem)]">
+          <div className="p-1">
+            {stocksQuery.isError ? (
+              <p className="px-3 py-2 text-sm text-destructive">Could not load market data.</p>
+            ) : null}
+            {watchlistItems.map((s) => {
+              const up = (s.change ?? 0) >= 0;
+              return (
+                <button
+                  key={s.symbol}
+                  type="button"
+                  className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-muted/80"
+                >
+                  <span className="flex items-center gap-2 font-medium">
+                    {symbolShort(s.symbol)}
+                    {s.symbol === 'INFY.NS' ? (
+                      <Briefcase className="size-3.5 text-muted-foreground" aria-hidden />
+                    ) : null}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className={cn('text-xs', up ? 'text-emerald-600' : 'text-red-600')}>
+                      {typeof s.change === 'number' ? `${up ? '+' : ''}${s.change.toFixed(2)}%` : '—'}
                     </span>
-                    <span className="flex items-center gap-2">
-                      <span className={cn('text-xs', up ? 'text-emerald-600' : 'text-red-600')}>
-                        {typeof s.change === 'number' ? `${up ? '+' : ''}${s.change.toFixed(2)}%` : '—'}
-                      </span>
-                      <span className={cn('tabular-nums', up ? 'text-emerald-600' : 'text-red-600')}>
-                        {typeof s.price === 'number' ? s.price.toFixed(2) : '—'}
-                      </span>
+                    <span className={cn('tabular-nums', up ? 'text-emerald-600' : 'text-red-600')}>
+                      {typeof s.price === 'number' ? s.price.toFixed(2) : '—'}
                     </span>
-                  </button>
-                );
-              })}
-            </div>
-          </ScrollArea>
-          <div className="mt-auto flex items-center justify-between border-t p-2 text-xs text-muted-foreground">
-            <div className="flex gap-1">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <span key={n} className="cursor-pointer px-1 hover:text-foreground">
-                  {n}
-                </span>
-              ))}
-            </div>
-            <Button variant="ghost" size="icon" className="size-8" aria-label="Settings">
-              <Settings className="size-4" />
-            </Button>
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        </aside>
-
-        <main className="min-w-0 flex-1 p-4 md:p-6">
-          <div className="mb-6 flex flex-col gap-1">
-            <h1 className="text-xl font-medium text-foreground">Hi, {displayName}</h1>
-            <p className="text-sm text-muted-foreground">
-              Live quotes from the API; portfolio and balance from your account.
-            </p>
+        </ScrollArea>
+        <div className="mt-auto flex items-center justify-between border-t p-2 text-xs text-muted-foreground">
+          <div className="flex gap-1">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <span key={n} className="cursor-pointer px-1 hover:text-foreground">
+                {n}
+              </span>
+            ))}
           </div>
+          <Button variant="ghost" size="icon" className="size-8" aria-label="Settings">
+            <Settings className="size-4" />
+          </Button>
+        </div>
+      </aside>
 
-          <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
-            <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                      <Clock className="size-4 text-primary" />
-                      Equity
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap items-end justify-between gap-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Cash balance</p>
-                        <p className="text-2xl font-bold tabular-nums">
-                          {meQuery.isLoading ? '…' : formatInr(cashBalance)}
-                        </p>
-                      </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        <p>Holdings value</p>
-                        <p className="font-medium text-foreground">{formatInr(holdingsMetrics.current)}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                      <Droplets className="size-4 text-primary" />
-                      Commodity
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground">Paper app is equity-only for now.</p>
-                    <p className="mt-2 text-2xl font-bold tabular-nums text-muted-foreground">—</p>
-                  </CardContent>
-                </Card>
-              </div>
+      <main className="min-w-0 flex-1 p-4 md:p-6">
+        <div className="mb-6 flex flex-col gap-1">
+          <h1 className="text-xl font-medium text-foreground">Hi, {displayName}</h1>
+          <p className="text-sm text-muted-foreground">
+            Live quotes from the API; portfolio and balance from your account.
+          </p>
+        </div>
 
+        <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Card>
-                <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <CardTitle>Holdings ({holdingsMetrics.count})</CardTitle>
-                    <CardDescription>From your portfolio (MongoDB)</CardDescription>
-                  </div>
-                  <div className="text-right">
-                    <p
-                      className={cn(
-                        'text-2xl font-bold tabular-nums',
-                        holdingsMetrics.pnl >= 0 ? 'text-emerald-600' : 'text-red-600',
-                      )}
-                    >
-                      {holdingsMetrics.pnl >= 0 ? '+' : ''}
-                      {formatInr(holdingsMetrics.pnl)}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      <span className={holdingsMetrics.pnlPct >= 0 ? 'text-emerald-600' : 'text-red-600'}>
-                        {holdingsMetrics.pnlPct >= 0 ? '+' : ''}
-                        {holdingsMetrics.pnlPct.toFixed(2)}%
-                      </span>
-                    </p>
-                  </div>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <Clock className="size-4 text-primary" />
+                    Equity
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="mb-4 flex flex-wrap justify-between gap-4 text-sm">
+                  <div className="flex flex-wrap items-end justify-between gap-4">
                     <div>
-                      <p className="text-muted-foreground">Current value</p>
-                      <p className="font-semibold tabular-nums">{formatInr(holdingsMetrics.current)}</p>
+                      <p className="text-xs text-muted-foreground">Cash balance</p>
+                      <p className="text-2xl font-bold tabular-nums">
+                        {meQuery.isLoading ? '…' : formatInr(cashBalance, 0)}
+                      </p>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground">Investment</p>
-                      <p className="font-semibold tabular-nums">{formatInr(holdingsMetrics.investment)}</p>
+                    <div className="text-right text-xs text-muted-foreground">
+                      <p>Holdings value</p>
+                      <p className="font-medium text-foreground">{formatInr(holdingsMetrics.current, 0)}</p>
                     </div>
-                  </div>
-                  <div className="flex h-8 w-full overflow-hidden rounded-md bg-muted">
-                    {(portfolioQuery.data ?? []).map((h, i) => {
-                      const ltp = priceMap.get(h.symbol) ?? h.average_price;
-                      const hue = (i * 47) % 360;
-                      const flex = h.quantity * ltp;
-                      return (
-                        <div
-                          key={h.symbol}
-                          title={`${h.symbol}`}
-                          className="h-full min-w-[6px] border-r border-background/50 last:border-0"
-                          style={{
-                            flex: `${flex} 1 0`,
-                            backgroundColor: `hsl(${hue} 45% 55%)`,
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                  <div className="mt-3 flex gap-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <span className="size-2 rounded-full bg-primary" /> Allocation (by LTP)
-                    </span>
                   </div>
                 </CardContent>
               </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                    <Droplets className="size-4 text-primary" />
+                    Commodity
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">Paper app is equity-only for now.</p>
+                  <p className="mt-2 text-2xl font-bold tabular-nums text-muted-foreground">—</p>
+                </CardContent>
+              </Card>
+            </div>
 
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Market overview</CardTitle>
-                    <CardDescription>NIFTY 50 · {nifty?.price?.toFixed(2) ?? '—'}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <HighchartsReact highcharts={Highcharts} options={niftyLineOptions} />
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Top 10 by price</CardTitle>
-                    <CardDescription>From market snapshot</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {stocksQuery.isLoading ? (
-                      <p className="text-sm text-muted-foreground">Loading…</p>
-                    ) : (
-                      <HighchartsReact highcharts={Highcharts} options={top10BarOptions} />
+            <Card>
+              <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2">
+                <div>
+                  <CardTitle>Holdings ({holdingsMetrics.count})</CardTitle>
+                  <CardDescription>From your portfolio (MongoDB)</CardDescription>
+                </div>
+                <div className="text-right">
+                  <p
+                    className={cn(
+                      'text-2xl font-bold tabular-nums',
+                      holdingsMetrics.pnl >= 0 ? 'text-emerald-600' : 'text-red-600',
                     )}
-                  </CardContent>
-                </Card>
-              </div>
+                  >
+                    {holdingsMetrics.pnl >= 0 ? '+' : ''}
+                    {formatInr(holdingsMetrics.pnl, 0)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    <span className={holdingsMetrics.pnlPct >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                      {holdingsMetrics.pnlPct >= 0 ? '+' : ''}
+                      {holdingsMetrics.pnlPct.toFixed(2)}%
+                    </span>
+                  </p>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4 flex flex-wrap justify-between gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Current value</p>
+                    <p className="font-semibold tabular-nums">{formatInr(holdingsMetrics.current, 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Investment</p>
+                    <p className="font-semibold tabular-nums">{formatInr(holdingsMetrics.investment, 0)}</p>
+                  </div>
+                </div>
+                <div className="flex h-8 w-full overflow-hidden rounded-md bg-muted">
+                  {(portfolioQuery.data ?? []).map((h, i) => {
+                    const ltp = priceMap.get(h.symbol) ?? h.average_price;
+                    const hue = (i * 47) % 360;
+                    const flex = h.quantity * ltp;
+                    return (
+                      <div
+                        key={h.symbol}
+                        title={`${h.symbol}`}
+                        className="h-full min-w-[6px] border-r border-background/50 last:border-0"
+                        style={{
+                          flex: `${flex} 1 0`,
+                          backgroundColor: `hsl(${hue} 45% 55%)`,
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+                <div className="mt-3 flex gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <span className="size-2 rounded-full bg-primary" /> Allocation (by LTP)
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
 
+            <div className="grid gap-4 lg:grid-cols-2">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Positions ({portfolioQuery.data?.length ?? 0})</CardTitle>
-                  <CardDescription>Share of portfolio by current value</CardDescription>
-                </CardHeader>
-                <CardContent>{positionsBarHtml}</CardContent>
-              </Card>
-            </div>
-
-            <div className="space-y-4">
-              <Card className="lg:hidden">
-                <CardHeader>
-                  <CardTitle className="text-base">Watchlist</CardTitle>
-                  <CardDescription>Open on a larger screen for the full sidebar.</CardDescription>
+                  <CardTitle className="text-base">Market overview</CardTitle>
+                  <CardDescription>NIFTY 50 · {nifty?.price?.toFixed(2) ?? '—'}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ScrollArea className="h-[200px] rounded-md border">
-                    <div className="p-2">
-                      {watchlistItems.slice(0, 8).map((s) => (
-                        <div
-                          key={s.symbol}
-                          className="flex justify-between border-b py-2 text-sm last:border-0"
-                        >
-                          <span className="font-medium">{symbolShort(s.symbol)}</span>
-                          <span className="tabular-nums">{s.price?.toFixed(2)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
+                  <HighchartsReact highcharts={Highcharts} options={niftyLineOptions} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Top 10 by price</CardTitle>
+                  <CardDescription>From market snapshot</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {stocksQuery.isLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading…</p>
+                  ) : (
+                    <HighchartsReact highcharts={Highcharts} options={top10BarOptions} />
+                  )}
                 </CardContent>
               </Card>
             </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Positions ({portfolioQuery.data?.length ?? 0})</CardTitle>
+                <CardDescription>Share of portfolio by current value</CardDescription>
+              </CardHeader>
+              <CardContent>{positionsBarHtml}</CardContent>
+            </Card>
           </div>
-        </main>
-      </div>
+
+          <div className="space-y-4">
+            <Card className="lg:hidden">
+              <CardHeader>
+                <CardTitle className="text-base">Watchlist</CardTitle>
+                <CardDescription>Open on a larger screen for the full sidebar.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[200px] rounded-md border">
+                  <div className="p-2">
+                    {watchlistItems.slice(0, 8).map((s) => (
+                      <div
+                        key={s.symbol}
+                        className="flex justify-between border-b py-2 text-sm last:border-0"
+                      >
+                        <span className="font-medium">{symbolShort(s.symbol)}</span>
+                        <span className="tabular-nums">{s.price?.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
