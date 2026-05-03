@@ -158,12 +158,6 @@ export function Holdings() {
           )}
         </CardContent>
       </Card>
-
-      <p className="text-center text-sm text-muted-foreground">
-        <Link to="/dashboard" className="text-primary underline-offset-4 hover:underline">
-          Dashboard
-        </Link>
-      </p>
     </main>
   );
 }

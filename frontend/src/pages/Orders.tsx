@@ -1,7 +1,5 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -228,20 +226,6 @@ export function Orders() {
           )}
         </CardContent>
       </Card>
-
-      <p className="text-center text-sm text-muted-foreground">
-        <Link to="/dashboard" className="text-primary underline-offset-4 hover:underline">
-          Dashboard
-        </Link>
-        {' · '}
-        <Link to="/holdings" className="text-primary underline-offset-4 hover:underline">
-          Holdings
-        </Link>
-        {' · '}
-        <Link to="/funds" className="text-primary underline-offset-4 hover:underline">
-          Funds
-        </Link>
-      </p>
     </main>
   );
 }
