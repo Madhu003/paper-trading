@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { getApiErrorMessage } from '@/lib/apiError';
 import { formatInr } from '@/lib/format';
 import { depositFunds, fetchMe } from '@/lib/queries';
 
@@ -20,14 +23,13 @@ export function Funds() {
     mutationFn: depositFunds,
     onSuccess: () => {
       setFormError(null);
+      toast.success('Funds added to your paper balance.');
       void queryClient.invalidateQueries({ queryKey: ['me'] });
     },
     onError: (err: unknown) => {
-      const msg =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
-          : null;
-      setFormError(msg ?? 'Could not add funds');
+      const msg = getApiErrorMessage(err, 'Could not add funds');
+      setFormError(msg);
+      toast.error(msg);
     },
   });
 
@@ -36,7 +38,9 @@ export function Funds() {
     setFormError(null);
     const n = Number(amount);
     if (!Number.isFinite(n) || n < 1) {
-      setFormError('Enter a valid amount (₹1 or more)');
+      const msg = 'Enter a valid amount (₹1 or more)';
+      setFormError(msg);
+      toast.warning(msg);
       return;
     }
     depositMut.mutate(Math.floor(n));

@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 
 import { MarketSessionBadge } from '@/components/MarketSessionBadge';
+import { useSocketConnectionStatus } from '@/hooks/useSocketConnectionStatus';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { setAuthToken } from '@/lib/api';
@@ -17,11 +18,11 @@ function activeNavKey(pathname: string): NavKey {
 }
 
 type Props = {
-  status: 'connecting' | 'live' | 'offline';
   nifty?: StockData | null;
 };
 
-export function KiteHeader({ status, nifty }: Props) {
+export function KiteHeader({ nifty }: Props) {
+  const status = useSocketConnectionStatus();
   const { pathname } = useLocation();
   const active = activeNavKey(pathname);
 

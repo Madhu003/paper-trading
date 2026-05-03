@@ -2,11 +2,13 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useMutation } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { api, setAuthToken } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/apiError';
 
 type SignUpVars = { username: string; email: string; password: string }
 
@@ -35,14 +37,15 @@ export function SignUp() {
     onSuccess: (data) => {
       localStorage.setItem('token', data.token);
       setAuthToken(data.token);
+      toast.success('Account created — you are signed in');
       navigate('/dashboard', { replace: true });
     },
     onError: (err: unknown) => {
-      if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.error ?? 'Sign up failed');
-        return;
-      }
-      setError('Sign up failed');
+      const msg = axios.isAxiosError(err)
+        ? getApiErrorMessage(err, 'Sign up failed')
+        : 'Sign up failed';
+      setError(msg);
+      toast.error(msg);
     },
   });
 
