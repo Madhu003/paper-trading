@@ -1,13 +1,13 @@
-import { io, Socket } from 'socket.io-client'
-import { API_URL } from './api'
+import { io, Socket } from 'socket.io-client';
+import { API_URL } from './api';
 
-let socket: Socket | null = null
+let socket: Socket | null = null;
 
 export function getSocket(): Socket {
-  if (socket) return socket
+  if (socket) return socket;
   socket = io(API_URL, {
     transports: ['websocket'],
-  })
-  return socket
+  });
+  return socket;
 }
 

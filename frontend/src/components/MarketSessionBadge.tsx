@@ -1,8 +1,8 @@
-import { Badge } from '@/components/ui/badge'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useNseMarketSession } from '@/hooks/useNseMarketSession'
-import { NSE_SESSION_TOOLTIP, formatIstBrief } from '@/lib/marketHours'
-import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useNseMarketSession } from '@/hooks/useNseMarketSession';
+import { NSE_SESSION_TOOLTIP, formatIstBrief } from '@/lib/marketHours';
+import { cn } from '@/lib/utils';
 
 export function MarketSessionBadge() {
   const open = useNseMarketSession(30_000);
@@ -36,5 +36,5 @@ export function MarketSessionBadge() {
         <p className="border-t border-border pt-1 text-[11px] text-muted-foreground">Now: {formatIstBrief()}</p>
       </TooltipContent>
     </Tooltip>
-  )
+  );
 }

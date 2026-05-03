@@ -1,19 +1,23 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router-dom';
 
-import { MarketSessionBadge } from '@/components/MarketSessionBadge'
-import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
-import type { StockData } from '@/types'
+import { MarketSessionBadge } from '@/components/MarketSessionBadge';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { setAuthToken } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import type { StockData } from '@/types';
 
-type NavKey = 'dashboard' | 'orders'
+type NavKey = 'dashboard' | 'orders' | 'holdings' | 'funds';
 
 type Props = {
-  active: NavKey
-  status: 'connecting' | 'live' | 'offline'
-  nifty?: StockData | null
-}
+  active: NavKey;
+  status: 'connecting' | 'live' | 'offline';
+  nifty?: StockData | null;
+  /** When true, show Sign out in the header (e.g. same as having a stored token). */
+  signedIn?: boolean;
+};
 
-export function KiteHeader({ active, status, nifty }: Props) {
+export function KiteHeader({ active, status, nifty, signedIn = false }: Props) {
   const nav = (to: string, key: NavKey, label: string) => (
     <Link
       to={to}
@@ -24,7 +28,13 @@ export function KiteHeader({ active, status, nifty }: Props) {
     >
       {label}
     </Link>
-  )
+  );
+
+  function signOut() {
+    localStorage.removeItem('token');
+    setAuthToken(null);
+    window.location.href = '/signin';
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b bg-card">
@@ -55,20 +65,27 @@ export function KiteHeader({ active, status, nifty }: Props) {
             )}
           </div>
         </div>
-        <nav className="flex shrink-0 items-center gap-4 md:gap-6">
+        <nav className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3 md:gap-4">
           {nav('/dashboard', 'dashboard', 'Dashboard')}
           {nav('/orders', 'orders', 'Orders')}
-          <span className="hidden text-xs font-medium uppercase tracking-wide text-muted-foreground md:inline">
-            Holdings
-          </span>
-          <span className="hidden text-xs font-medium uppercase tracking-wide text-muted-foreground lg:inline">
-            Funds
-          </span>
-          <Badge variant="outline" className="hidden font-normal lg:inline-flex">
+          {nav('/holdings', 'holdings', 'Holdings')}
+          {nav('/funds', 'funds', 'Funds')}
+          <Badge variant="outline" className="hidden font-normal sm:inline-flex">
             Live: {status}
           </Badge>
+          {signedIn ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+              onClick={signOut}
+            >
+              Sign out
+            </Button>
+          ) : null}
         </nav>
       </div>
     </header>
-  )
+  );
 }

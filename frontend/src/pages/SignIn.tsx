@@ -1,12 +1,12 @@
-import { useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import axios from 'axios'
-import { useMutation } from '@tanstack/react-query'
+import { useMemo, useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { useMutation } from '@tanstack/react-query';
 
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { api, setAuthToken } from '@/lib/api'
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { api, setAuthToken } from '@/lib/api';
 
 type SignInVars = { email: string; password: string }
 
@@ -16,37 +16,37 @@ type SignInResponse = {
 }
 
 export function SignIn() {
-  const navigate = useNavigate()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = useMemo(() => email.trim() && password.trim(), [email, password])
+  const canSubmit = useMemo(() => email.trim() && password.trim(), [email, password]);
 
   const signIn = useMutation({
     mutationFn: async (vars: SignInVars) => {
-      const { data } = await api.post<SignInResponse>('/auth/signin', vars)
-      return data
+      const { data } = await api.post<SignInResponse>('/auth/signin', vars);
+      return data;
     },
     onSuccess: (data) => {
-      localStorage.setItem('token', data.token)
-      setAuthToken(data.token)
-      navigate('/dashboard', { replace: true })
+      localStorage.setItem('token', data.token);
+      setAuthToken(data.token);
+      navigate('/dashboard', { replace: true });
     },
     onError: (err: unknown) => {
       if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.error ?? 'Sign in failed')
-        return
+        setError(err.response?.data?.error ?? 'Sign in failed');
+        return;
       }
-      setError('Sign in failed')
+      setError('Sign in failed');
     },
-  })
+  });
 
   function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (!canSubmit) return
-    setError(null)
-    signIn.mutate({ email, password })
+    e.preventDefault();
+    if (!canSubmit) return;
+    setError(null);
+    signIn.mutate({ email, password });
   }
 
   return (
@@ -102,5 +102,5 @@ export function SignIn() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

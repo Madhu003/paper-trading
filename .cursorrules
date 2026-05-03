@@ -1,0 +1,4 @@
+# Project Rules
+
+- Always use semicolons at the end of every statement in TypeScript/JavaScript files.
+- Adhere to the ESLint configuration in the frontend directory.

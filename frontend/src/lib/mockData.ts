@@ -1,9 +1,9 @@
-import type { StockData } from '../types'
+import type { StockData } from '../types';
 
 export const mockIndices = {
   nifty: { name: 'NIFTY 50', price: 24785.2, changePct: 0.42 },
   sensex: { name: 'SENSEX', price: 81734.5, changePct: -0.18 },
-}
+};
 
 export const mockUser = {
   displayName: 'Trader',
@@ -13,7 +13,7 @@ export const mockUser = {
   accountValueEquity: 51200,
   marginsUsedCommodity: 0,
   accountValueCommodity: 12500,
-}
+};
 
 export type MockHolding = {
   symbol: string
@@ -29,13 +29,13 @@ export const mockHoldings: MockHolding[] = [
   { symbol: 'TCS', name: 'TCS', qty: 2, avgPrice: 4100, ltp: 4239.9 },
   { symbol: 'HDFCBANK', name: 'HDFC Bank', qty: 15, avgPrice: 1700, ltp: 1761.2 },
   { symbol: 'ITC', name: 'ITC', qty: 100, avgPrice: 440, ltp: 456.7 },
-]
+];
 
 export const mockPositions = [
   { symbol: 'NIFTY25JANFUT', label: 'NIFTY FUT', valuePct: 45 },
   { symbol: 'BANKNIFTY', label: 'BANKNIFTY', valuePct: 30 },
   { symbol: 'RELIANCE', label: 'RELIANCE', valuePct: 25 },
-]
+];
 
 export const mockStocks: StockData[] = [
   { symbol: '^NSEI', name: 'NIFTY 50', price: 24785.2, change: 0.42 },
@@ -59,9 +59,9 @@ export const mockStocks: StockData[] = [
   { symbol: 'TITAN.NS', name: 'Titan', price: 3520.8, change: 0.84 },
   { symbol: 'HCLTECH.NS', name: 'HCL Tech', price: 1512.6, change: 0.14 },
   { symbol: 'ADANIENT.NS', name: 'Adani Enterprises', price: 3250.0, change: 1.63 },
-]
+];
 
 export function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms))
+  return new Promise((r) => setTimeout(r, ms));
 }
 

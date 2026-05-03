@@ -1,83 +1,45 @@
 import './loadEnv';
-import { startupLog } from './startupLog';
+import { createClient } from 'redis';
+import { redisTarget, startupLog } from './startupLog';
 
-/** In-memory entry with optional TTL (same semantics as EX). */
-type Entry = { value: string; expiresAt?: number };
-
-const mem = new Map<string, Entry>();
-
-let ensureLogged = false;
-
-function isExpired(e: Entry): boolean {
-  return e.expiresAt !== undefined && Date.now() > e.expiresAt;
+const url = process.env.REDIS_URL?.trim();
+if (!url) {
+  throw new Error('REDIS_URL is required in backend/.env (e.g. redis://user:pass@host:port)');
 }
 
-/** Return active entry or delete if expired. */
-function getEntry(key: string): Entry | undefined {
-  const e = mem.get(key);
-  if (!e) return undefined;
-  if (isExpired(e)) {
-    mem.delete(key);
-    return undefined;
+export const redis = createClient({ url });
+
+let redisErrOnce = false;
+redis.on('error', (err) => {
+  if (!redisErrOnce) {
+    redisErrOnce = true;
+    startupLog('redis: client error (further errors may be suppressed in logs)', { message: String(err) });
   }
-  return e;
-}
+  console.error('Redis error:', err);
+});
 
-/**
- * Process-local Redis stand-in (plain Map + TTL). No TCP — avoids connection
- * errors when Redis isn’t running. Swap for a real client later if needed.
- */
-export const redis = {
-  get isOpen() {
-    return true;
-  },
-
-  on(_event: string, _fn: (err: unknown) => void) {
-    // no-op (real redis client wires error handlers here)
-  },
-
-  async connect(): Promise<void> {
-    // no-op
-  },
-
-  async get(key: string): Promise<string | null> {
-    const e = getEntry(key);
-    return e ? e.value : null;
-  },
-
-  async set(key: string, value: string, opts?: { EX?: number }): Promise<'OK'> {
-    const expiresAt =
-      opts?.EX !== undefined ? Date.now() + Math.max(0, opts.EX) * 1000 : undefined;
-    mem.set(key, { value, expiresAt });
-    return 'OK';
-  },
-
-  async incr(key: string): Promise<number> {
-    const prev = getEntry(key);
-    let n = 1;
-    let expiresAt: number | undefined;
-    if (prev) {
-      const parsed = parseInt(prev.value, 10);
-      n = Number.isFinite(parsed) ? parsed + 1 : 1;
-      expiresAt = prev.expiresAt;
-    }
-    mem.set(key, { value: String(n), expiresAt });
-    return n;
-  },
-
-  async expire(key: string, seconds: number): Promise<number> {
-    const e = getEntry(key);
-    if (!e) return 0;
-    e.expiresAt = Date.now() + Math.max(0, seconds) * 1000;
-    return 1;
-  },
-};
+let connectPromise: Promise<void> | null = null;
+let connectLogged = false;
 
 export async function ensureRedisConnected(): Promise<void> {
-  if (!ensureLogged) {
-    ensureLogged = true;
-    startupLog('redis: in-memory mock (Map + TTL, no REDIS_URL connection)', {
-      note: 'safe for local dev without redis-server',
-    });
+  if (redis.isOpen) return;
+  if (!connectPromise) {
+    const target = redisTarget(url);
+    startupLog('redis: connect() starting', { target });
+    const t0 = Date.now();
+    connectPromise = redis
+      .connect()
+      .then(() => {
+        if (!connectLogged) {
+          connectLogged = true;
+          startupLog('redis: connected', { ms: Date.now() - t0, target });
+        }
+      })
+      .catch((e) => {
+        startupLog('redis: connect() failed', { ms: Date.now() - t0, error: String(e) });
+        connectPromise = null;
+        throw e;
+      });
   }
+  await connectPromise;
 }

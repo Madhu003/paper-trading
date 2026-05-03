@@ -10,6 +10,7 @@ import { startStockUpdates, getStockPrices } from './services/stockService';
 import { ensureRedisConnected, redis } from './redis';
 import { rateLimit } from './middleware/rateLimit';
 import { startupLog } from './startupLog';
+import { attachOrderFanout } from './realtime/orderFanout';
 
 startupLog('http: boot — creating Express, HTTP server, Socket.IO');
 const app = express();
@@ -20,6 +21,7 @@ const io = new Server(server, {
     methods: ['GET', 'POST'],
   },
 });
+attachOrderFanout(io);
 
 app.use(cors());
 app.use(express.json());

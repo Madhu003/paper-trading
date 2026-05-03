@@ -3,7 +3,7 @@ import { ObjectId } from 'mongodb';
 import { getDb } from '../db';
 import type { AuthedRequest } from '../middleware/auth';
 import { requireAuth } from '../middleware/auth';
-import { placeMarketOrder } from '../services/orderEngine';
+import { enqueueMarketOrder } from '../services/orderEngine';
 
 const router = express.Router();
 
@@ -71,7 +71,7 @@ router.post('/orders', requireAuth, async (req: AuthedRequest, res: Response) =>
       return;
     }
 
-    const result = await placeMarketOrder({
+    const result = await enqueueMarketOrder({
       userId: req.userId!,
       symbol,
       side,
@@ -83,7 +83,7 @@ router.post('/orders', requireAuth, async (req: AuthedRequest, res: Response) =>
       return;
     }
 
-    res.status(201).json(result);
+    res.status(202).json(result);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Order failed' });
@@ -147,6 +147,34 @@ router.get('/transactions', requireAuth, async (req: AuthedRequest, res: Respons
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Failed to load transactions' });
+  }
+});
+
+router.post('/funds/deposit', requireAuth, async (req: AuthedRequest, res: Response) => {
+  try {
+    const raw = (req.body as { amount?: unknown }).amount;
+    const amount = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(amount) || amount < 1) {
+      res.status(400).json({ error: 'amount must be a number ≥ 1' });
+      return;
+    }
+    const rounded = Math.floor(amount);
+    if (rounded > 50_000_000) {
+      res.status(400).json({ error: 'amount too large for paper account' });
+      return;
+    }
+    const userId = new ObjectId(req.userId!);
+    const db = getDb();
+    const r = await db.collection('users').updateOne({ _id: userId }, { $inc: { balance: rounded } });
+    if (r.matchedCount !== 1) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+    const u = await db.collection('users').findOne({ _id: userId });
+    res.status(200).json({ balance: u?.balance ?? 0, added: rounded });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Deposit failed' });
   }
 });
 

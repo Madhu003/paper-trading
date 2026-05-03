@@ -1,112 +1,128 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { useEffect, useState, type FormEvent } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 
-import { KiteHeader } from '@/components/KiteHeader'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { setAuthToken } from '@/lib/api'
-import { fetchMe, fetchOrders, fetchStocks, fetchTransactions, placeOrder } from '@/lib/queries'
-import { getSocket } from '@/lib/socket'
-import { cn } from '@/lib/utils'
-import type { StockData } from '@/types'
+import { KiteHeader } from '@/components/KiteHeader';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { setAuthToken } from '@/lib/api';
+import { fetchMe, fetchOrders, fetchStocks, fetchTransactions, placeOrder } from '@/lib/queries';
+import { getSocket } from '@/lib/socket';
+import { cn } from '@/lib/utils';
+import type { StockData } from '@/types';
 
 function pickNifty(stocks: StockData[]) {
-  return stocks.find((s) => s.symbol === '^NSEI' || s.name?.toLowerCase().includes('nifty')) ?? null
+  return stocks.find((s) => s.symbol === '^NSEI' || s.name?.toLowerCase().includes('nifty')) ?? null;
 }
 
 function formatInr(n: number) {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n)
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n);
 }
 
 function formatDt(iso: string) {
   try {
-    return new Date(iso).toLocaleString()
+    return new Date(iso).toLocaleString();
   } catch {
-    return iso
+    return iso;
   }
 }
 
 export function Orders() {
-  const queryClient = useQueryClient()
-  const [status, setStatus] = useState<'connecting' | 'live' | 'offline'>('connecting')
-  const [hasToken] = useState(() => !!localStorage.getItem('token'))
-  const [symbol, setSymbol] = useState('INFY.NS')
-  const [side, setSide] = useState<'BUY' | 'SELL'>('BUY')
-  const [quantity, setQuantity] = useState('5')
-  const [formError, setFormError] = useState<string | null>(null)
+  const queryClient = useQueryClient();
+  const [status, setStatus] = useState<'connecting' | 'live' | 'offline'>('connecting');
+  const [hasToken] = useState(() => !!localStorage.getItem('token'));
+  const [symbol, setSymbol] = useState('INFY.NS');
+  const [side, setSide] = useState<'BUY' | 'SELL'>('BUY');
+  const [quantity, setQuantity] = useState('5');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [queueMsg, setQueueMsg] = useState<string | null>(null);
 
   const stocksQuery = useQuery({
     queryKey: ['stocks'],
     queryFn: fetchStocks,
     staleTime: 5_000,
     retry: 1,
-  })
+  });
 
-  const nifty = pickNifty(stocksQuery.data ?? [])
+  const nifty = pickNifty(stocksQuery.data ?? []);
 
   const ordersQuery = useQuery({
     queryKey: ['orders'],
     queryFn: fetchOrders,
     enabled: hasToken,
-  })
+    refetchInterval: (q) => {
+      const rows = q.state.data;
+      return rows?.some((o) => o.status === 'PENDING') ? 2500 : false;
+    },
+  });
 
   const txQuery = useQuery({
     queryKey: ['transactions'],
     queryFn: fetchTransactions,
     enabled: hasToken,
-  })
+  });
 
   const meQuery = useQuery({
     queryKey: ['me'],
     queryFn: fetchMe,
     enabled: hasToken,
-  })
+  });
 
   useEffect(() => {
-    setAuthToken(localStorage.getItem('token'))
-  }, [])
+    setAuthToken(localStorage.getItem('token'));
+  }, []);
 
   useEffect(() => {
-    const socket = getSocket()
-    const onConnect = () => setStatus('live')
-    const onDisconnect = () => setStatus('offline')
-    socket.on('connect', onConnect)
-    socket.on('disconnect', onDisconnect)
+    const socket = getSocket();
+    const onConnect = () => setStatus('live');
+    const onDisconnect = () => setStatus('offline');
+    const onOrdersChanged = () => {
+      void queryClient.invalidateQueries({ queryKey: ['orders'] });
+      void queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+      void queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      void queryClient.invalidateQueries({ queryKey: ['me'] });
+    };
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('ordersChanged', onOrdersChanged);
     return () => {
-      socket.off('connect', onConnect)
-      socket.off('disconnect', onDisconnect)
-    }
-  }, [])
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('ordersChanged', onOrdersChanged);
+    };
+  }, [queryClient]);
 
   const placeMut = useMutation({
     mutationFn: placeOrder,
-    onSuccess: () => {
-      setFormError(null)
-      void queryClient.invalidateQueries({ queryKey: ['orders'] })
-      void queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      void queryClient.invalidateQueries({ queryKey: ['portfolio'] })
-      void queryClient.invalidateQueries({ queryKey: ['me'] })
+    onSuccess: (data) => {
+      setFormError(null);
+      const sec = Math.round((data.settleInMs ?? 0) / 100) / 10;
+      setQueueMsg(`Order queued — fills in about ${sec}s (paper delay).`);
+      void queryClient.invalidateQueries({ queryKey: ['orders'] });
+      void queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      void queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+      void queryClient.invalidateQueries({ queryKey: ['me'] });
     },
     onError: (err: unknown) => {
       const msg =
         err && typeof err === 'object' && 'response' in err
           ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
-          : null
-      setFormError(msg ?? 'Order failed')
+          : null;
+      setFormError(msg ?? 'Order failed');
     },
-  })
+  });
 
   function submitOrder(e: FormEvent) {
-    e.preventDefault()
-    setFormError(null)
-    const q = Number(quantity)
+    e.preventDefault();
+    setFormError(null);
+    setQueueMsg(null);
+    const q = Number(quantity);
     if (!Number.isFinite(q) || q <= 0) {
-      setFormError('Enter a valid quantity')
-      return
+      setFormError('Enter a valid quantity');
+      return;
     }
-    placeMut.mutate({ symbol: symbol.trim(), side, quantity: Math.floor(q) })
+    placeMut.mutate({ symbol: symbol.trim(), side, quantity: Math.floor(q) });
   }
 
   if (!hasToken) {
@@ -117,12 +133,12 @@ export function Orders() {
           <Link to="/signin">Sign in</Link>
         </Button>
       </div>
-    )
+    );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <KiteHeader active="orders" status={status} nifty={nifty} />
+      <KiteHeader active="orders" status={status} nifty={nifty} signedIn />
 
       <main className="mx-auto max-w-[1100px] space-y-6 p-4 md:p-6">
         <div>
@@ -137,7 +153,10 @@ export function Orders() {
           <Card>
             <CardHeader>
               <CardTitle>Place order</CardTitle>
-              <CardDescription>Market order at latest cached / live price (paper).</CardDescription>
+              <CardDescription>
+                Market order — queued first, then fills in ~5–10s (random paper latency). Holdings update after
+                fill.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={submitOrder} className="space-y-4">
@@ -179,6 +198,7 @@ export function Orders() {
                   />
                 </div>
                 {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+                {queueMsg ? <p className="text-sm text-emerald-600">{queueMsg}</p> : null}
                 <Button type="submit" className="w-full" disabled={placeMut.isPending}>
                   {placeMut.isPending ? 'Submitting…' : 'Submit'}
                 </Button>
@@ -189,7 +209,7 @@ export function Orders() {
           <Card>
             <CardHeader>
               <CardTitle>Recent orders</CardTitle>
-              <CardDescription>Includes rejected attempts.</CardDescription>
+              <CardDescription>Pending rows settle automatically; includes rejected attempts.</CardDescription>
             </CardHeader>
             <CardContent>
               {ordersQuery.isLoading ? (
@@ -219,15 +239,17 @@ export function Orders() {
                           <td className="p-2">
                             <span
                               className={cn(
-                                'text-xs',
-                                o.status === 'EXECUTED' ? 'text-emerald-600' : 'text-destructive',
+                                'text-xs font-medium',
+                                o.status === 'EXECUTED' && 'text-emerald-600',
+                                o.status === 'PENDING' && 'text-amber-600',
+                                o.status === 'REJECTED' && 'text-destructive',
                               )}
                             >
                               {o.status}
                             </span>
                           </td>
                           <td className="p-2 text-right tabular-nums">
-                            {o.status === 'EXECUTED' ? formatInr(o.total) : '—'}
+                            {o.status === 'EXECUTED' ? formatInr(o.total) : o.status === 'PENDING' ? '…' : '—'}
                           </td>
                         </tr>
                       ))}
@@ -282,10 +304,18 @@ export function Orders() {
 
         <p className="text-center text-sm text-muted-foreground">
           <Link to="/dashboard" className="text-primary underline-offset-4 hover:underline">
-            Back to dashboard
+            Dashboard
+          </Link>
+          {' · '}
+          <Link to="/holdings" className="text-primary underline-offset-4 hover:underline">
+            Holdings
+          </Link>
+          {' · '}
+          <Link to="/funds" className="text-primary underline-offset-4 hover:underline">
+            Funds
           </Link>
         </p>
       </main>
     </div>
-  )
+  );
 }

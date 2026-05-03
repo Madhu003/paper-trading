@@ -1,12 +1,12 @@
-import { useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import axios from 'axios'
-import { useMutation } from '@tanstack/react-query'
+import { useMemo, useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { useMutation } from '@tanstack/react-query';
 
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { api, setAuthToken } from '@/lib/api'
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { api, setAuthToken } from '@/lib/api';
 
 type SignUpVars = { username: string; email: string; password: string }
 
@@ -16,41 +16,41 @@ type SignUpResponse = {
 }
 
 export function SignUp() {
-  const navigate = useNavigate()
-  const [username, setUsername] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate();
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const canSubmit = useMemo(
     () => username.trim().length >= 3 && email.trim() && password.trim().length >= 6,
     [username, email, password],
-  )
+  );
 
   const signUp = useMutation({
     mutationFn: async (vars: SignUpVars) => {
-      const { data } = await api.post<SignUpResponse>('/auth/signup', vars)
-      return data
+      const { data } = await api.post<SignUpResponse>('/auth/signup', vars);
+      return data;
     },
     onSuccess: (data) => {
-      localStorage.setItem('token', data.token)
-      setAuthToken(data.token)
-      navigate('/dashboard', { replace: true })
+      localStorage.setItem('token', data.token);
+      setAuthToken(data.token);
+      navigate('/dashboard', { replace: true });
     },
     onError: (err: unknown) => {
       if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.error ?? 'Sign up failed')
-        return
+        setError(err.response?.data?.error ?? 'Sign up failed');
+        return;
       }
-      setError('Sign up failed')
+      setError('Sign up failed');
     },
-  })
+  });
 
   function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (!canSubmit) return
-    setError(null)
-    signUp.mutate({ username, email, password })
+    e.preventDefault();
+    if (!canSubmit) return;
+    setError(null);
+    signUp.mutate({ username, email, password });
   }
 
   return (
@@ -115,5 +115,5 @@ export function SignUp() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

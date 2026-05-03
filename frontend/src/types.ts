@@ -24,7 +24,7 @@ export type OrderRow = {
   symbol: string
   side: 'BUY' | 'SELL'
   quantity: number
-  status: 'EXECUTED' | 'REJECTED'
+  status: 'PENDING' | 'EXECUTED' | 'REJECTED'
   executed_price: number
   total: number
   error_message?: string

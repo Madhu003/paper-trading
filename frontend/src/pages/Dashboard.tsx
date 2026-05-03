@@ -1,143 +1,149 @@
-import { useEffect, useMemo, useState } from 'react'
-import Highcharts from 'highcharts'
-import HighchartsReact from 'highcharts-react-official'
-import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
-import { Search, Briefcase, Clock, Droplets, Settings } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react';
+import Highcharts from 'highcharts';
+import HighchartsReact from 'highcharts-react-official';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Search, Briefcase, Clock, Droplets, Settings } from 'lucide-react';
 
-import { KiteHeader } from '@/components/KiteHeader'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
-import { setAuthToken } from '@/lib/api'
-import { fetchMe, fetchPortfolio, fetchStocks } from '@/lib/queries'
-import { getSocket } from '@/lib/socket'
-import { cn } from '@/lib/utils'
-import type { StockData } from '@/types'
+import { KiteHeader } from '@/components/KiteHeader';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { setAuthToken } from '@/lib/api';
+import { fetchMe, fetchPortfolio, fetchStocks } from '@/lib/queries';
+import { getSocket } from '@/lib/socket';
+import { cn } from '@/lib/utils';
+import type { StockData } from '@/types';
 
 function pickNifty(stocks: StockData[]) {
-  return stocks.find((s) => s.symbol === '^NSEI' || s.name?.toLowerCase().includes('nifty')) ?? null
+  return stocks.find((s) => s.symbol === '^NSEI' || s.name?.toLowerCase().includes('nifty')) ?? null;
 }
 
 function sortTop(stocks: StockData[]) {
   return [...stocks]
     .filter((s) => s.symbol !== '^NSEI')
     .sort((a, b) => (b.price ?? 0) - (a.price ?? 0))
-    .slice(0, 20)
+    .slice(0, 20);
 }
 
 function formatInr(n: number) {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n)
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 }
 
 function symbolShort(s: string) {
-  return s.replace('.NS', '').replace('^NSEI', 'NIFTY')
+  return s.replace('.NS', '').replace('^NSEI', 'NIFTY');
 }
 
 function pseudo01(seed: number, i: number) {
-  const x = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453
-  return x - Math.floor(x)
+  const x = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453;
+  return x - Math.floor(x);
 }
 
 export function Dashboard() {
-  const [streamStocks, setStreamStocks] = useState<StockData[] | undefined>(undefined)
-  const [watchQuery, setWatchQuery] = useState('')
-  const [status, setStatus] = useState<'connecting' | 'live' | 'offline'>('connecting')
-  const [hasToken] = useState(() => !!localStorage.getItem('token'))
+  const queryClient = useQueryClient();
+  const [streamStocks, setStreamStocks] = useState<StockData[] | undefined>(undefined);
+  const [watchQuery, setWatchQuery] = useState('');
+  const [status, setStatus] = useState<'connecting' | 'live' | 'offline'>('connecting');
+  const [hasToken] = useState(() => !!localStorage.getItem('token'));
 
   const stocksQuery = useQuery({
     queryKey: ['stocks'],
     queryFn: fetchStocks,
     staleTime: 5_000,
     retry: 1,
-  })
+  });
 
   const meQuery = useQuery({
     queryKey: ['me'],
     queryFn: fetchMe,
     enabled: hasToken,
     staleTime: 15_000,
-  })
+  });
 
   const portfolioQuery = useQuery({
     queryKey: ['portfolio'],
     queryFn: fetchPortfolio,
     enabled: hasToken,
     staleTime: 10_000,
-  })
+  });
 
-  const queryStocks = stocksQuery.data
-  const stocks = useMemo(() => streamStocks ?? queryStocks ?? [], [streamStocks, queryStocks])
+  const queryStocks = stocksQuery.data;
+  const stocks = useMemo(() => streamStocks ?? queryStocks ?? [], [streamStocks, queryStocks]);
 
-  const nifty = useMemo(() => pickNifty(stocks), [stocks])
-  const top20 = useMemo(() => sortTop(stocks), [stocks])
+  const nifty = useMemo(() => pickNifty(stocks), [stocks]);
+  const top20 = useMemo(() => sortTop(stocks), [stocks]);
 
   const priceMap = useMemo(() => {
-    const m = new Map<string, number>()
+    const m = new Map<string, number>();
     for (const s of stocks) {
-      if (typeof s.price === 'number') m.set(s.symbol, s.price)
+      if (typeof s.price === 'number') m.set(s.symbol, s.price);
     }
-    return m
-  }, [stocks])
+    return m;
+  }, [stocks]);
 
   const holdingsMetrics = useMemo(() => {
-    const rows = portfolioQuery.data ?? []
-    let investment = 0
-    let current = 0
+    const rows = portfolioQuery.data ?? [];
+    let investment = 0;
+    let current = 0;
     for (const h of rows) {
-      investment += h.quantity * h.average_price
-      const ltp = priceMap.get(h.symbol) ?? h.average_price
-      current += h.quantity * ltp
+      investment += h.quantity * h.average_price;
+      const ltp = priceMap.get(h.symbol) ?? h.average_price;
+      current += h.quantity * ltp;
     }
-    const pnl = current - investment
-    const pnlPct = investment > 0 ? (pnl / investment) * 100 : 0
-    return { investment, current, pnl, pnlPct, count: rows.length }
-  }, [portfolioQuery.data, priceMap])
+    const pnl = current - investment;
+    const pnlPct = investment > 0 ? (pnl / investment) * 100 : 0;
+    return { investment, current, pnl, pnlPct, count: rows.length };
+  }, [portfolioQuery.data, priceMap]);
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    setAuthToken(token)
-  }, [])
+    const token = localStorage.getItem('token');
+    setAuthToken(token);
+  }, []);
 
   useEffect(() => {
-    const socket = getSocket()
-    const onConnect = () => setStatus('live')
-    const onDisconnect = () => setStatus('offline')
-    const onStockUpdates = (payload: StockData[]) => setStreamStocks(payload)
-    socket.on('connect', onConnect)
-    socket.on('disconnect', onDisconnect)
-    socket.on('stockUpdates', onStockUpdates)
+    const socket = getSocket();
+    const onConnect = () => setStatus('live');
+    const onDisconnect = () => setStatus('offline');
+    const onStockUpdates = (payload: StockData[]) => setStreamStocks(payload);
+    const onOrdersChanged = () => {
+      void queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+      void queryClient.invalidateQueries({ queryKey: ['me'] });
+      void queryClient.invalidateQueries({ queryKey: ['orders'] });
+    };
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('stockUpdates', onStockUpdates);
+    socket.on('ordersChanged', onOrdersChanged);
     return () => {
-      socket.off('connect', onConnect)
-      socket.off('disconnect', onDisconnect)
-      socket.off('stockUpdates', onStockUpdates)
-    }
-  }, [])
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('stockUpdates', onStockUpdates);
+      socket.off('ordersChanged', onOrdersChanged);
+    };
+  }, [queryClient]);
 
   const watchlistItems = useMemo(() => {
-    const list = stocks.filter((s) => s.symbol !== '^NSEI')
-    const q = watchQuery.trim().toLowerCase()
-    if (!q) return list
+    const list = stocks.filter((s) => s.symbol !== '^NSEI');
+    const q = watchQuery.trim().toLowerCase();
+    if (!q) return list;
     return list.filter(
       (s) =>
         s.symbol.toLowerCase().includes(q) ||
         (s.name && s.name.toLowerCase().includes(q)),
-    )
-  }, [stocks, watchQuery])
+    );
+  }, [stocks, watchQuery]);
 
   const niftyLinePoints = useMemo(() => {
-    const base = nifty?.price ?? 24_000
-    const seed = Math.round(base * 100)
-    const points: number[] = []
-    let v = base * 0.992
+    const base = nifty?.price ?? 24_000;
+    const seed = Math.round(base * 100);
+    const points: number[] = [];
+    let v = base * 0.992;
     for (let i = 0; i < 40; i++) {
-      v += (pseudo01(seed, i) - 0.48) * (base * 0.0015)
-      points.push(Number(v.toFixed(2)))
+      v += (pseudo01(seed, i) - 0.48) * (base * 0.0015);
+      points.push(Number(v.toFixed(2)));
     }
-    return points
-  }, [nifty?.price])
+    return points;
+  }, [nifty?.price]);
 
   const niftyLineOptions = useMemo(() => {
     return {
@@ -157,11 +163,11 @@ export function Dashboard() {
           lineWidth: 2,
         },
       ],
-    } as Highcharts.Options
-  }, [niftyLinePoints])
+    } as Highcharts.Options;
+  }, [niftyLinePoints]);
 
   const top10BarOptions = useMemo(() => {
-    const series = top20.slice(0, 10)
+    const series = top20.slice(0, 10);
     return {
       chart: { backgroundColor: 'transparent', height: 220 },
       title: { text: '' },
@@ -180,22 +186,22 @@ export function Dashboard() {
           color: 'hsl(14, 100%, 57%)',
         },
       ],
-    } as Highcharts.Options
-  }, [top20])
+    } as Highcharts.Options;
+  }, [top20]);
 
   const positionsBarHtml = useMemo(() => {
-    const rows = portfolioQuery.data ?? []
+    const rows = portfolioQuery.data ?? [];
     const totalVal = rows.reduce((a, r) => {
-      const ltp = priceMap.get(r.symbol) ?? r.average_price
-      return a + r.quantity * ltp
-    }, 0)
+      const ltp = priceMap.get(r.symbol) ?? r.average_price;
+      return a + r.quantity * ltp;
+    }, 0);
     if (totalVal <= 0 || rows.length === 0) {
-      return <p className="text-sm text-muted-foreground">No open positions. Place a buy on Orders.</p>
+      return <p className="text-sm text-muted-foreground">No open positions. Place a buy on Orders.</p>;
     }
     return rows.map((r) => {
-      const ltp = priceMap.get(r.symbol) ?? r.average_price
-      const v = r.quantity * ltp
-      const pct = Math.round((v / totalVal) * 100)
+      const ltp = priceMap.get(r.symbol) ?? r.average_price;
+      const v = r.quantity * ltp;
+      const pct = Math.round((v / totalVal) * 100);
       return (
         <div key={r.symbol} className="mb-2">
           <div className="mb-0.5 flex justify-between text-xs text-muted-foreground">
@@ -206,16 +212,16 @@ export function Dashboard() {
             <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
           </div>
         </div>
-      )
-    })
-  }, [portfolioQuery.data, priceMap])
+      );
+    });
+  }, [portfolioQuery.data, priceMap]);
 
-  const displayName = meQuery.data?.username ?? 'Trader'
-  const cashBalance = meQuery.data?.balance ?? 0
+  const displayName = meQuery.data?.username ?? 'Trader';
+  const cashBalance = meQuery.data?.balance ?? 0;
 
   return (
     <div className="min-h-screen bg-background">
-      <KiteHeader active="dashboard" status={status} nifty={nifty} />
+      <KiteHeader active="dashboard" status={status} nifty={nifty} signedIn={hasToken} />
 
       <div className="mx-auto flex max-w-[1600px]">
         <aside className="hidden w-[280px] shrink-0 border-r bg-card lg:flex lg:flex-col">
@@ -236,7 +242,7 @@ export function Dashboard() {
                 <p className="px-3 py-2 text-sm text-destructive">Could not load market data.</p>
               ) : null}
               {watchlistItems.map((s) => {
-                const up = (s.change ?? 0) >= 0
+                const up = (s.change ?? 0) >= 0;
                 return (
                   <button
                     key={s.symbol}
@@ -258,7 +264,7 @@ export function Dashboard() {
                       </span>
                     </span>
                   </button>
-                )
+                );
               })}
             </div>
           </ScrollArea>
@@ -360,9 +366,9 @@ export function Dashboard() {
                   </div>
                   <div className="flex h-8 w-full overflow-hidden rounded-md bg-muted">
                     {(portfolioQuery.data ?? []).map((h, i) => {
-                      const ltp = priceMap.get(h.symbol) ?? h.average_price
-                      const hue = (i * 47) % 360
-                      const flex = h.quantity * ltp
+                      const ltp = priceMap.get(h.symbol) ?? h.average_price;
+                      const hue = (i * 47) % 360;
+                      const flex = h.quantity * ltp;
                       return (
                         <div
                           key={h.symbol}
@@ -373,7 +379,7 @@ export function Dashboard() {
                             backgroundColor: `hsl(${hue} 45% 55%)`,
                           }}
                         />
-                      )
+                      );
                     })}
                   </div>
                   <div className="mt-3 flex gap-4 text-xs text-muted-foreground">
@@ -419,30 +425,6 @@ export function Dashboard() {
             </div>
 
             <div className="space-y-4">
-              <Card className="border-primary/20 bg-primary/5">
-                <CardHeader>
-                  <CardTitle className="text-base">Quick actions</CardTitle>
-                  <CardDescription>Place trades on the Orders page.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <Button className="w-full" asChild>
-                    <Link to="/orders">Go to Orders</Link>
-                  </Button>
-                  <Separator />
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      localStorage.removeItem('token')
-                      setAuthToken(null)
-                      window.location.href = '/signin'
-                    }}
-                  >
-                    Sign out
-                  </Button>
-                </CardContent>
-              </Card>
-
               <Card className="lg:hidden">
                 <CardHeader>
                   <CardTitle className="text-base">Watchlist</CardTitle>
@@ -469,5 +451,5 @@ export function Dashboard() {
         </main>
       </div>
     </div>
-  )
+  );
 }
