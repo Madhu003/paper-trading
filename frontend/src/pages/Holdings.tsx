@@ -1,34 +1,28 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Link, useOutletContext } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { AppOutletContext } from '@/layouts/types';
+import { useMeQuery } from '@/hooks/useMeQuery';
+import { usePortfolioQuery } from '@/hooks/usePortfolioQuery';
 import { formatInr } from '@/lib/format';
 import { symbolShort } from '@/lib/marketDisplay';
-import { fetchMe, fetchPortfolio } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
 export function Holdings() {
   const { stocks } = useOutletContext<AppOutletContext>();
 
-  const portfolioQuery = useQuery({
-    queryKey: ['portfolio'],
-    queryFn: fetchPortfolio,
-    staleTime: 5_000,
-  });
-
-  const meQuery = useQuery({
-    queryKey: ['me'],
-    queryFn: fetchMe,
-  });
+  const portfolioQuery = usePortfolioQuery({ staleTime: 5_000 });
+  const meQuery = useMeQuery();
 
   const priceMap = useMemo(() => {
     const m = new Map<string, number>();
     for (const s of stocks) {
-      if (typeof s.price === 'number') m.set(s.symbol, s.price);
+      if (typeof s.price === 'number') {
+        m.set(s.symbol, s.price);
+      }
     }
     return m;
   }, [stocks]);

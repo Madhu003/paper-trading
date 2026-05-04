@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
-import { useQuery } from '@tanstack/react-query';
 import { useOutletContext } from 'react-router-dom';
 import { Search, Briefcase, Clock, Droplets, Settings } from 'lucide-react';
 
@@ -10,9 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { AppOutletContext } from '@/layouts/types';
+import { useMeQuery } from '@/hooks/useMeQuery';
+import { usePortfolioQuery } from '@/hooks/usePortfolioQuery';
 import { formatInr } from '@/lib/format';
 import { pickNifty, sortTopStocks, symbolShort } from '@/lib/marketDisplay';
-import { fetchMe, fetchPortfolio } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
 function pseudo01(seed: number, i: number) {
@@ -24,17 +24,8 @@ export function Dashboard() {
   const { stocks, stocksQuery } = useOutletContext<AppOutletContext>();
   const [watchQuery, setWatchQuery] = useState('');
 
-  const meQuery = useQuery({
-    queryKey: ['me'],
-    queryFn: fetchMe,
-    staleTime: 15_000,
-  });
-
-  const portfolioQuery = useQuery({
-    queryKey: ['portfolio'],
-    queryFn: fetchPortfolio,
-    staleTime: 10_000,
-  });
+  const meQuery = useMeQuery({ staleTime: 15_000 });
+  const portfolioQuery = usePortfolioQuery({ staleTime: 10_000 });
 
   const nifty = useMemo(() => pickNifty(stocks), [stocks]);
   const top20 = useMemo(() => sortTopStocks(stocks, 20), [stocks]);
@@ -42,7 +33,9 @@ export function Dashboard() {
   const priceMap = useMemo(() => {
     const m = new Map<string, number>();
     for (const s of stocks) {
-      if (typeof s.price === 'number') m.set(s.symbol, s.price);
+      if (typeof s.price === 'number') {
+        m.set(s.symbol, s.price);
+      }
     }
     return m;
   }, [stocks]);
@@ -64,7 +57,9 @@ export function Dashboard() {
   const watchlistItems = useMemo(() => {
     const list = stocks.filter((s) => s.symbol !== '^NSEI');
     const q = watchQuery.trim().toLowerCase();
-    if (!q) return list;
+    if (!q) {
+      return list;
+    }
     return list.filter(
       (s) =>
         s.symbol.toLowerCase().includes(q) ||

@@ -1,24 +1,15 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
-import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { api, setAuthToken } from '@/lib/api';
+import { useSignUpMutation } from '@/hooks/useSignUpMutation';
 import { getApiErrorMessage } from '@/lib/apiError';
 
-type SignUpVars = { username: string; email: string; password: string }
-
-type SignUpResponse = {
-  token: string
-  user: { id: string; username: string; email: string }
-}
-
 export function SignUp() {
-  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,31 +20,26 @@ export function SignUp() {
     [username, email, password],
   );
 
-  const signUp = useMutation({
-    mutationFn: async (vars: SignUpVars) => {
-      const { data } = await api.post<SignUpResponse>('/auth/signup', vars);
-      return data;
-    },
-    onSuccess: (data) => {
-      localStorage.setItem('token', data.token);
-      setAuthToken(data.token);
-      toast.success('Account created — you are signed in');
-      navigate('/dashboard', { replace: true });
-    },
-    onError: (err: unknown) => {
-      const msg = axios.isAxiosError(err)
-        ? getApiErrorMessage(err, 'Sign up failed')
-        : 'Sign up failed';
-      setError(msg);
-      toast.error(msg);
-    },
-  });
+  const signUp = useSignUpMutation();
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      return;
+    }
     setError(null);
-    signUp.mutate({ username, email, password });
+    signUp.mutate(
+      { username, email, password },
+      {
+        onError: (err: unknown) => {
+          const msg = axios.isAxiosError(err)
+            ? getApiErrorMessage(err, 'Sign up failed')
+            : 'Sign up failed';
+          setError(msg);
+          toast.error(msg);
+        },
+      },
+    );
   }
 
   return (

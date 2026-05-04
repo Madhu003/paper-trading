@@ -1,21 +1,13 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { api, setAuthToken } from '@/lib/api';
+import { useSignInMutation } from '@/hooks/useSignInMutation';
 import { getApiErrorMessage } from '@/lib/apiError';
-
-type SignInVars = { email: string; password: string }
-
-type SignInResponse = {
-  token: string
-  user: { id: string; username: string; email: string; balance?: number }
-}
 
 export function SignIn() {
   const navigate = useNavigate();
@@ -25,31 +17,26 @@ export function SignIn() {
 
   const canSubmit = useMemo(() => email.trim() && password.trim(), [email, password]);
 
-  const signIn = useMutation({
-    mutationFn: async (vars: SignInVars) => {
-      const { data } = await api.post<SignInResponse>('/auth/signin', vars);
-      return data;
-    },
-    onSuccess: (data) => {
-      localStorage.setItem('token', data.token);
-      setAuthToken(data.token);
-      toast.success('Signed in');
-      navigate('/dashboard', { replace: true });
-    },
-    onError: (err: unknown) => {
-      const msg = axios.isAxiosError(err)
-        ? getApiErrorMessage(err, 'Sign in failed')
-        : 'Sign in failed';
-      setError(msg);
-      toast.error(msg);
-    },
-  });
+  const signIn = useSignInMutation();
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      return;
+    }
     setError(null);
-    signIn.mutate({ email, password });
+    signIn.mutate(
+      { email, password },
+      {
+        onError: (err: unknown) => {
+          const msg = axios.isAxiosError(err)
+            ? getApiErrorMessage(err, 'Sign in failed')
+            : 'Sign in failed';
+          setError(msg);
+          toast.error(msg);
+        },
+      },
+    );
   }
 
   return (

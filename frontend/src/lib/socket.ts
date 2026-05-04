@@ -1,6 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 
-import { API_URL } from './api';
+import { API_URL } from '@/api/client';
 import { setSocketConnectionStatus } from './socketConnection';
 
 let socket: Socket | null = null;

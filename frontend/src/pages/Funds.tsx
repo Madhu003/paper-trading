@@ -1,37 +1,20 @@
 import { useState, type FormEvent } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { useDepositFundsMutation } from '@/hooks/useDepositFundsMutation';
+import { useMeQuery } from '@/hooks/useMeQuery';
 import { getApiErrorMessage } from '@/lib/apiError';
 import { formatInr } from '@/lib/format';
-import { depositFunds, fetchMe } from '@/lib/queries';
 
 export function Funds() {
-  const queryClient = useQueryClient();
   const [amount, setAmount] = useState('25000');
   const [formError, setFormError] = useState<string | null>(null);
 
-  const meQuery = useQuery({
-    queryKey: ['me'],
-    queryFn: fetchMe,
-  });
-
-  const depositMut = useMutation({
-    mutationFn: depositFunds,
-    onSuccess: () => {
-      setFormError(null);
-      toast.success('Funds added to your paper balance.');
-      void queryClient.invalidateQueries({ queryKey: ['me'] });
-    },
-    onError: (err: unknown) => {
-      const msg = getApiErrorMessage(err, 'Could not add funds');
-      setFormError(msg);
-      toast.error(msg);
-    },
-  });
+  const meQuery = useMeQuery();
+  const depositMut = useDepositFundsMutation();
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -43,7 +26,17 @@ export function Funds() {
       toast.warning(msg);
       return;
     }
-    depositMut.mutate(Math.floor(n));
+    depositMut.mutate(Math.floor(n), {
+      onSuccess: () => {
+        setFormError(null);
+        toast.success('Funds added to your paper balance.');
+      },
+      onError: (err: unknown) => {
+        const msg = getApiErrorMessage(err, 'Could not add funds');
+        setFormError(msg);
+        toast.error(msg);
+      },
+    });
   }
 
   return (

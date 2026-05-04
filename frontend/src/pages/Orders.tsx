@@ -1,58 +1,28 @@
 import { useState, type FormEvent } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { useMeQuery } from '@/hooks/useMeQuery';
+import { useOrdersQuery } from '@/hooks/useOrdersQuery';
+import { usePlaceOrderMutation } from '@/hooks/usePlaceOrderMutation';
+import { useTransactionsQuery } from '@/hooks/useTransactionsQuery';
 import { getApiErrorMessage } from '@/lib/apiError';
 import { formatDateTime, formatInr } from '@/lib/format';
-import { fetchMe, fetchOrders, fetchTransactions, placeOrder } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
 export function Orders() {
-  const queryClient = useQueryClient();
   const [symbol, setSymbol] = useState('INFY.NS');
   const [side, setSide] = useState<'BUY' | 'SELL'>('BUY');
   const [quantity, setQuantity] = useState('5');
   const [formError, setFormError] = useState<string | null>(null);
 
-  const ordersQuery = useQuery({
-    queryKey: ['orders'],
-    queryFn: fetchOrders,
-    refetchInterval: (q) => {
-      const rows = q.state.data;
-      return rows?.some((o) => o.status === 'PENDING') ? 2500 : false;
-    },
-  });
-
-  const txQuery = useQuery({
-    queryKey: ['transactions'],
-    queryFn: fetchTransactions,
-  });
-
-  const meQuery = useQuery({
-    queryKey: ['me'],
-    queryFn: fetchMe,
-  });
-
-  const placeMut = useMutation({
-    mutationFn: placeOrder,
-    onSuccess: (data) => {
-      setFormError(null);
-      const sec = Math.round((data.settleInMs ?? 0) / 100) / 10;
-      toast.success(`Order queued — fills in about ${sec}s (paper delay).`);
-      void queryClient.invalidateQueries({ queryKey: ['orders'] });
-      void queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      void queryClient.invalidateQueries({ queryKey: ['portfolio'] });
-      void queryClient.invalidateQueries({ queryKey: ['me'] });
-    },
-    onError: (err: unknown) => {
-      const msg = getApiErrorMessage(err, 'Order failed');
-      setFormError(msg);
-      toast.error(msg);
-    },
-  });
+  const ordersQuery = useOrdersQuery();
+  const txQuery = useTransactionsQuery();
+  const meQuery = useMeQuery();
+  const placeMut = usePlaceOrderMutation();
 
   function submitOrder(e: FormEvent) {
     e.preventDefault();
@@ -64,7 +34,21 @@ export function Orders() {
       toast.warning(msg);
       return;
     }
-    placeMut.mutate({ symbol: symbol.trim(), side, quantity: Math.floor(q) });
+    placeMut.mutate(
+      { symbol: symbol.trim(), side, quantity: Math.floor(q) },
+      {
+        onSuccess: (data) => {
+          setFormError(null);
+          const sec = Math.round((data.settleInMs ?? 0) / 100) / 10;
+          toast.success(`Order queued — fills in about ${sec}s (paper delay).`);
+        },
+        onError: (err: unknown) => {
+          const msg = axios.isAxiosError(err) ? getApiErrorMessage(err, 'Order failed') : 'Order failed';
+          setFormError(msg);
+          toast.error(msg);
+        },
+      },
+    );
   }
 
   return (

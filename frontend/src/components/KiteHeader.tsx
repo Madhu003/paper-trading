@@ -4,7 +4,7 @@ import { MarketSessionBadge } from '@/components/MarketSessionBadge';
 import { useSocketConnectionStatus } from '@/hooks/useSocketConnectionStatus';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { setAuthToken } from '@/lib/api';
+import { setAuthToken } from '@/api/client';
 import { cn } from '@/lib/utils';
 import type { StockData } from '@/types';
 
