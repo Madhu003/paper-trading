@@ -23,17 +23,6 @@ export function mongoHostFromUri(uri: string | undefined): string {
   }
 }
 
-export function redisTarget(url: string | undefined): string {
-  if (!url?.trim()) return '(REDIS_URL unset)';
-  try {
-    const u = new URL(url);
-    const port = u.port || (u.protocol === 'rediss:' ? '6380' : '6379');
-    return `${u.hostname}:${port}`;
-  } catch {
-    return '(invalid REDIS_URL)';
-  }
-}
-
 export function startupLog(message: string, meta?: any) {
   const timestamp = new Date().toISOString();
   const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
@@ -57,7 +46,6 @@ export function envSummary() {
     mongoHost: mongoHostFromUri(mongoUri),
     mongoUriRedacted: redactMongoUri(mongoUri),
     JWT_SECRET_set: !!process.env.JWT_SECRET,
-    redis: redisTarget(process.env.REDIS_URL),
   };
 }
 

@@ -65,14 +65,17 @@ startupLog('http: starting stock poll worker (first NSE fetch runs immediately, 
 startStockUpdates(io);
 
 const PORT = process.env.PORT || 5001;
-startupLog('http: calling connectMongo() — server.listen runs only after success', { PORT });
 
+// 1. Bind the port immediately so Render's health check passes
+server.listen(PORT, '0.0.0.0', () => {
+  startupLog('http: listening', { PORT, url: `http://0.0.0.0:${PORT}` });
+});
+
+// 2. Connect to MongoDB in the background
+startupLog('http: calling connectMongo() in background');
 connectMongo()
   .then((db) => {
-    startupLog('http: Mongo ready, binding listener', { database: db.databaseName, PORT });
-    server.listen(PORT, () => {
-      startupLog('http: listening', { PORT, url: `http://localhost:${PORT}` });
-    });
+    startupLog('http: Mongo ready', { database: db.databaseName, PORT });
   })
   .catch((err) => {
     startupLog('http: abort — Mongo connection failed', {
@@ -80,5 +83,5 @@ connectMongo()
       message: err instanceof Error ? err.message : String(err),
     });
     console.error('MongoDB connection failed:', err);
-    process.exit(1);
+    // Do not process.exit(1) immediately to allow inspection of logs, or let the orchestrator handle it.
   });

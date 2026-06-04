@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from './client';
-import { queryKeys } from './queryKeys';
 
 export interface NewsItem {
   id: string;
