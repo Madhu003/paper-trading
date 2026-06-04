@@ -61,17 +61,25 @@ export async function connectPg(): Promise<Pool> {
     return pool;
   }
 
-  const connectionString = process.env.DATABASE_URL?.trim() ?? '';
+  let connectionString = process.env.DATABASE_URL?.trim() ?? '';
   if (!connectionString) {
     throw new Error('DATABASE_URL is required');
   }
 
+  // Force Render to accept self-signed certificates globally for this process
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
+  // Ensure no conflicting sslmode is in the URL, then force no-verify
+  connectionString = connectionString.split('?')[0];
+  
   startupLog('pg: connecting', { url: connectionString.split('@')[1] || 'hidden' });
 
   const t0 = Date.now();
   pool = new Pool({
     connectionString,
-    ssl: { rejectUnauthorized: false }
+    ssl: { 
+      rejectUnauthorized: false 
+    }
   });
 
   // Verify connection
