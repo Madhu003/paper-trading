@@ -64,7 +64,7 @@ io.on('connection', (socket) => {
 startupLog('http: starting stock poll worker (first NSE fetch runs immediately, then every 10s)');
 startStockUpdates(io);
 
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5001;
 
 // 1. Bind the port immediately so Render's health check passes
 server.listen(PORT, '0.0.0.0', () => {
