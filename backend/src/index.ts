@@ -6,6 +6,7 @@ import { connectMongo } from './db';
 import authRoutes from './routes/auth';
 import ordersRoutes from './routes/orders';
 import { startStockUpdates, getCachedPrices } from './services/stockService';
+import { getMarketNews } from './services/newsService';
 import { attachOrderFanout } from './realtime/orderFanout';
 import { startupLog } from './startupLog';
 import './loadEnv';
@@ -40,6 +41,15 @@ app.get('/health', (req, res) => {
 app.get('/api/stocks', (req, res) => {
   const prices = getCachedPrices();
   res.json(prices);
+});
+
+app.get('/api/news', async (req, res) => {
+  try {
+    const news = await getMarketNews();
+    res.json(news);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch news' });
+  }
 });
 
 // Socket.io connection

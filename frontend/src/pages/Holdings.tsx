@@ -171,10 +171,10 @@ export function Holdings() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-muted/50 border-b border-muted/50 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            <div className="overflow-x-auto max-h-[600px] rounded-b-xl">
+              <table className="w-full text-left relative">
+                <thead className="sticky top-0 z-10 bg-background/95 backdrop-blur shadow-sm">
+                  <tr className="border-b border-muted/50 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     <th className="p-4 pl-6">Instrument</th>
                     <th className="p-4 text-right">Qty</th>
                     <th className="p-4 text-right">Avg. Cost</th>

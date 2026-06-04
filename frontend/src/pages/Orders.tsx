@@ -1,7 +1,8 @@
 import { useState, type FormEvent, useMemo } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { ShoppingCart, ListChecks, History, Search, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { ShoppingCart, ListChecks, History, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import Select from 'react-select';
 
 import { Button } from '@/components/atoms/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
@@ -13,9 +14,49 @@ import { getApiErrorMessage } from '@/lib/apiError';
 import { formatDateTime, formatInr } from '@/lib/format';
 import { symbolShort } from '@/lib/marketDisplay';
 import { cn } from '@/lib/utils';
+import { FO_STOCKS } from '@/lib/constants';
+
+const customSelectStyles = {
+  control: (base: any) => ({
+    ...base,
+    background: 'hsl(var(--muted) / 0.2)',
+    borderColor: 'transparent',
+    minHeight: '48px',
+    boxShadow: 'none',
+    borderRadius: 'calc(var(--radius) - 2px)',
+    '&:hover': {
+      borderColor: 'transparent'
+    }
+  }),
+  singleValue: (base: any) => ({
+    ...base,
+    color: 'hsl(var(--foreground))',
+    fontWeight: 900
+  }),
+  input: (base: any) => ({
+    ...base,
+    color: 'hsl(var(--foreground))'
+  }),
+  menu: (base: any) => ({
+    ...base,
+    background: 'hsl(var(--background))',
+    border: '1px solid hsl(var(--border))',
+    zIndex: 50,
+    borderRadius: 'calc(var(--radius) - 2px)',
+  }),
+  option: (base: any, state: any) => ({
+    ...base,
+    backgroundColor: state.isFocused ? 'hsl(var(--muted))' : 'transparent',
+    color: 'hsl(var(--foreground))',
+    cursor: 'pointer',
+    '&:active': {
+      backgroundColor: 'hsl(var(--muted) / 0.5)'
+    }
+  })
+};
 
 export function Orders() {
-  const [symbol, setSymbol] = useState('INFY.NS');
+  const [symbol, setSymbol] = useState(FO_STOCKS[0].symbol);
   const [side, setSide] = useState<'BUY' | 'SELL'>('BUY');
   const [quantity, setQuantity] = useState('5');
   const [formError, setFormError] = useState<string | null>(null);
@@ -28,6 +69,13 @@ export function Orders() {
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
   }, [ordersQuery.data]);
+
+  const selectOptions = useMemo(() => {
+    return FO_STOCKS.map(s => ({
+      value: s.symbol,
+      label: `${symbolShort(s.symbol)} - ${s.name}`
+    }));
+  }, []);
 
   function submitOrder(e: FormEvent) {
     e.preventDefault();
@@ -84,15 +132,14 @@ export function Orders() {
               <form onSubmit={submitOrder} className="space-y-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Instrument Symbol</label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/50" />
-                    <Input
-                      value={symbol}
-                      onChange={(e) => setSymbol(e.target.value)}
-                      placeholder="e.g., RELIANCE"
-                      className="pl-10 h-12 bg-muted/20 border-none font-bold focus-visible:ring-primary/20"
-                    />
-                  </div>
+                  <Select
+                    options={selectOptions}
+                    value={selectOptions.find(o => o.value === symbol)}
+                    onChange={(val) => setSymbol(val?.value || '')}
+                    styles={customSelectStyles}
+                    isSearchable
+                    placeholder="Search stocks..."
+                  />
                 </div>
                 
                 <div className="flex gap-2">
@@ -190,10 +237,10 @@ export function Orders() {
                   <p className="text-muted-foreground font-medium italic">No orders recorded for this session.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="bg-muted/50 border-b border-muted/50 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                <div className="overflow-x-auto max-h-[500px] rounded-b-xl">
+                  <table className="w-full text-left relative">
+                    <thead className="sticky top-0 z-10 bg-background/95 backdrop-blur shadow-sm">
+                      <tr className="border-b border-muted/50 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                         <th className="p-4 pl-6">Time</th>
                         <th className="p-4">Instrument</th>
                         <th className="p-4 text-center">Side</th>

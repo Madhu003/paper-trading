@@ -17,6 +17,7 @@ import { formatInr } from '@/lib/format';
 import { pickNifty, sortTopStocks, symbolShort } from '@/lib/marketDisplay';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/components/theme-provider';
+import { useMarketNewsQuery } from '@/api/news';
 import type { StockData } from '@/types';
 
 function pseudo01(seed: number, i: number) {
@@ -24,19 +25,13 @@ function pseudo01(seed: number, i: number) {
   return x - Math.floor(x);
 }
 
-const MOCK_NEWS = [
-  { id: 1, title: 'NSE hits record high as FII inflows surge', time: '10m ago', category: 'Markets' },
-  { id: 2, title: 'Reliance Industries announces major expansion in green energy', time: '1h ago', category: 'Corporate' },
-  { id: 3, title: 'RBI maintains status quo on repo rates', time: '3h ago', category: 'Economy' },
-  { id: 4, title: 'IT sector sees recovery on strong US tech outlook', time: '5h ago', category: 'Sectors' },
-];
-
 export function Dashboard() {
   const { stocks, stocksQuery } = useOutletContext<AppOutletContext>();
   const { theme } = useTheme();
 
   const meQuery = useMeQuery({ staleTime: 15_000 });
   const portfolioQuery = usePortfolioQuery({ staleTime: 10_000 });
+  const newsQuery = useMarketNewsQuery();
   const placeOrder = usePlaceOrderMutation();
 
   const [selectedStock, setSelectedStock] = useState<StockData | null>(null);
@@ -116,7 +111,7 @@ export function Dashboard() {
 
   const niftyLineOptions = useMemo(() => {
     return {
-      chart: { backgroundColor: 'transparent', height: 240 },
+      chart: { backgroundColor: 'transparent', height: 240, type: 'area' },
       title: { text: '' },
       xAxis: { visible: false },
       yAxis: { 
@@ -126,14 +121,26 @@ export function Dashboard() {
       },
       legend: { enabled: false },
       credits: { enabled: false },
-      plotOptions: { series: { marker: { enabled: false } } },
+      plotOptions: { 
+        area: { 
+          fillColor: {
+            linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+            stops: [
+              [0, 'hsla(14, 100%, 57%, 0.3)'],
+              [1, 'hsla(14, 100%, 57%, 0)']
+            ]
+          },
+          marker: { radius: 0 },
+          lineWidth: 2,
+          states: { hover: { lineWidth: 3 } },
+          threshold: null
+        } 
+      },
       series: [
         {
-          type: 'line',
           name: 'NIFTY 50',
           data: niftyLinePoints,
           color: 'hsl(14, 100%, 57%)',
-          lineWidth: 2,
         },
       ],
     } as Highcharts.Options;
@@ -161,8 +168,17 @@ export function Dashboard() {
           type: 'column',
           name: 'Price',
           data: series.map((s) => Number(s.price ?? 0)),
-          color: theme === 'dark' ? '#334155' : '#e2e8f0',
+          color: theme === 'dark' ? 'hsl(217, 91%, 60%)' : 'hsl(217, 91%, 50%)',
           borderRadius: 4,
+          states: {
+            hover: {
+              color: theme === 'dark' ? 'hsl(217, 91%, 70%)' : 'hsl(217, 91%, 40%)',
+              brightness: 0.1
+            }
+          },
+          tooltip: {
+            valuePrefix: '₹'
+          }
         },
       ],
     } as Highcharts.Options;
@@ -362,20 +378,28 @@ export function Dashboard() {
               </div>
             </CardHeader>
             <CardContent className="p-0 flex-1">
-              <div className="divide-y divide-muted/50">
-                {MOCK_NEWS.map(news => (
-                  <div key={news.id} className="p-4 hover:bg-muted/30 transition-colors cursor-pointer group">
-                    <div className="flex justify-between items-start gap-4">
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-primary uppercase tracking-wider">{news.category}</span>
-                        <h3 className="text-sm font-semibold group-hover:text-primary transition-colors line-clamp-2">{news.title}</h3>
-                        <p className="text-[10px] text-muted-foreground font-medium">{news.time}</p>
+              {newsQuery.isLoading ? (
+                <div className="p-6 space-y-4">
+                  {[1, 2, 3].map(i => <div key={i} className="h-16 w-full bg-muted animate-pulse rounded-xl" />)}
+                </div>
+              ) : newsQuery.isError ? (
+                 <div className="p-6 text-center text-sm text-muted-foreground italic">Failed to load news feed.</div>
+              ) : (
+                <div className="divide-y divide-muted/50">
+                  {(newsQuery.data || []).map(news => (
+                    <a key={news.id} href={news.link} target="_blank" rel="noopener noreferrer" className="block p-4 hover:bg-muted/30 transition-colors group">
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-primary uppercase tracking-wider">{news.category || news.publisher}</span>
+                          <h3 className="text-sm font-semibold group-hover:text-primary transition-colors line-clamp-2">{news.title}</h3>
+                          <p className="text-[10px] text-muted-foreground font-medium">{news.time} · {news.publisher}</p>
+                        </div>
+                        <ArrowUpRight className="size-4 text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0" />
                       </div>
-                      <ArrowUpRight className="size-4 text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0" />
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    </a>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
