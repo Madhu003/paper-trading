@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Button } from '@/components/atoms/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
+import { Input } from '@/components/atoms/input';
 import { useDepositFundsMutation } from '@/hooks/useDepositFundsMutation';
 import { useMeQuery } from '@/hooks/useMeQuery';
 import { getApiErrorMessage } from '@/lib/apiError';

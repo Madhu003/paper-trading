@@ -1,52 +1,49 @@
-# Paper Trading Platform
+# 📈 Paper Trading Platform
 
-A high-performance, real-time paper trading simulator designed to mimic the experience of live stock market trading. This platform allows users to practice trading strategies using virtual currency with live market data.
+A high-fidelity, real-time paper trading simulator designed for the Indian stock market (NSE). This platform enables users to practice trading strategies with virtual currency using live, real-time market data.
 
-## 🚀 Features
+## 🚀 Key Features
 
-### 📈 Real-Time Market Data
-- **Live Stock Feeds:** Continuous polling of market prices via Yahoo Finance API.
-- **WebSocket Integration:** Real-time price updates pushed to the frontend using Socket.IO for a zero-latency feel.
-- **NSE Market Support:** Focused on the National Stock Exchange (NSE) with support for NIFTY 50 and other major Indian indices.
-- **Interactive Charts:** High-performance technical charts powered by Highcharts for visualizing price movements.
+### ⚡ Real-Time Market Integration
+- **Live NSE Feed:** Direct integration with NSE India for real-time stock and index quotes (NIFTY 50).
+- **Batch Processing:** Optimized background polling worker that fetches data in intelligent batches to ensure freshness.
+- **WebSocket Streaming:** Instant price updates pushed to the frontend via Socket.IO for a zero-latency trading experience.
+- **Interactive Technical Charts:** High-performance charts powered by Highcharts for deep price analysis.
 
-### 🛡️ Secure Trading Engine
-- **Delayed Fulfillment:** Simulates real-world market liquidity by introducing a random settlement delay (5-10s) for market orders.
-- **Transactional Integrity:** Uses MongoDB transactions to ensure atomic operations for balance updates, portfolio changes, and order execution.
-- **Portfolio Management:** Automatic calculation of average purchase price, current value, and real-time P&L (Profit and Loss).
-- **Validation:** Rigorous checks for sufficient balance, available stock quantity for selling, and valid market hours.
+### 💼 Professional Trading Experience
+- **Quick Trade Modal:** Instant Buy/Sell interface with quantity selection, real-time value calculation, and affordability checks.
+- **Delayed Order Fulfillment:** Simulates real-world market liquidity and execution latency (5-10s delay).
+- **Portfolio Analytics:** Real-time P&L tracking, average cost calculation, and visual portfolio allocation breakdown.
+- **Market News Feed:** Integrated live news highlights to keep you informed of market-moving events.
 
-### 👤 User Account & Security
-- **JWT Authentication:** Secure stateless authentication for all protected API endpoints.
-- **Rate Limiting:** Global and per-route rate limiting to prevent API abuse.
-- **Starting Balance:** New users are initialized with a virtual balance to begin trading immediately.
-- **Profile Management:** View current balance, personal info, and account statistics.
+### 📋 Activity & Tracking
+- **Comprehensive Activity Log:** Detailed transaction history tracking every buy, sell, and fund movement.
+- **Order Lifecycle:** Track orders from 'PENDING' to 'EXECUTED' or 'REJECTED' with detailed status messages.
+- **Funds Management:** Easily add virtual capital to your account to increase your buying power.
 
-### 🖥️ Modern Frontend Dashboard
-- **Kite-Inspired UI:** A clean, professional trading interface inspired by industry-standard platforms like Zerodha Kite.
-- **Dynamic Watchlist:** Search and track your favorite stocks with real-time price highlights.
-- **Orders Management:** Track the lifecycle of your orders from 'PENDING' to 'EXECUTED' or 'REJECTED'.
-- **Holdings Overview:** Detailed breakdown of current investments with total investment vs. current value analysis.
-- **Funds Interface:** Manage virtual funds and view historical transaction logs.
+### 🌗 Modern UI/UX
+- **Atomic Design Architecture:** Built with a highly maintainable and scalable component structure (Atoms, Molecules, Organisms).
+- **Dual Theme Support:** Full support for Light and Dark modes with a professional, Kite-inspired aesthetic.
+- **Responsive Layout:** Seamless experience across desktop and mobile devices.
 
-### 🛠️ Technical Stack
-- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, Lucide React (Icons), TanStack Query (State Management).
-- **Backend:** Node.js, Express, TypeScript, Socket.IO.
-- **Database:** MongoDB (Data Persistence), Redis (Caching & Rate Limiting).
-- **Styling:** Radix UI primitives for accessible components.
+## 🛠️ Technical Stack
+
+- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, TanStack Query, Lucide Icons, Sonner (Toasts).
+- **Backend:** Node.js, Express, TypeScript, Socket.IO, MongoDB (Aggregation & Transactions).
+- **State Management:** Server-state synchronization with TanStack Query and real-time Socket.IO events.
 
 ## 🏗️ Architecture
 
-- **Order Fanout:** A specialized service that monitors database changes and pushes order status updates only to the relevant authenticated users.
-- **Stock Poll Worker:** A background worker that fetches the latest prices every 10 seconds and broadcasts them to all connected clients.
-- **Middleware Layer:** Includes custom authentication guards and Redis-backed rate limiters.
+The platform is designed with simplicity and reliability in mind:
+- **Simplified Backend:** Infrastructure-light setup using in-memory caching for real-time data, removing external dependencies like Redis for easier deployment.
+- **Transactional Integrity:** Uses MongoDB transactions to ensure that trades, balance updates, and portfolio changes are always atomic.
+- **Component-Driven UI:** Leveraging an atomic design system for consistent styling and rapid feature development.
 
 ## 🚦 Getting Started
 
 ### Prerequisites
 - Node.js (v18+)
-- MongoDB
-- Redis
+- MongoDB (Local or Atlas)
 
 ### Installation
 
@@ -59,7 +56,7 @@ A high-performance, real-time paper trading simulator designed to mimic the expe
 2. **Backend Setup:**
    ```bash
    cd backend
-   cp .env.example .env
+   cp .env.example .env # Update with your MONGODB_URI
    npm install
    npm run dev
    ```
@@ -73,4 +70,4 @@ A high-performance, real-time paper trading simulator designed to mimic the expe
    ```
 
 ## 📜 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.

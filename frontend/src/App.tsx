@@ -6,6 +6,7 @@ import { Dashboard } from '@/pages/Dashboard';
 import { Funds } from '@/pages/Funds';
 import { Holdings } from '@/pages/Holdings';
 import { Orders } from '@/pages/Orders';
+import { Transactions } from '@/pages/Transactions';
 import { SignIn } from '@/pages/SignIn';
 import { SignUp } from '@/pages/SignUp';
 
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/orders" element={<Orders />} />
           <Route path="/holdings" element={<Holdings />} />
           <Route path="/funds" element={<Funds />} />
+          <Route path="/transactions" element={<Transactions />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

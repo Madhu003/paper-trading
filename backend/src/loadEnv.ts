@@ -4,8 +4,10 @@ import { envSummary, startupLog } from './startupLog';
 
 const envPath = path.resolve(__dirname, '..', '.env');
 const result = dotenv.config({ path: envPath });
+
+const summary = envSummary();
 startupLog('env loaded', {
-  envPath,
+  ...summary,
+  envPath, // Explicit override of the default path if needed
   dotenvError: result.error ? String(result.error.message) : null,
-  ...envSummary(),
 });

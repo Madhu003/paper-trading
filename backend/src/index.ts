@@ -1,39 +1,30 @@
-import './loadEnv';
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import { connectMongo } from './db';
 import authRoutes from './routes/auth';
 import ordersRoutes from './routes/orders';
-import { connectMongo } from './db';
-import { startStockUpdates, getStockPrices } from './services/stockService';
-import { ensureRedisConnected, redis } from './redis';
-import { rateLimit } from './middleware/rateLimit';
-import { startupLog } from './startupLog';
+import { startStockUpdates, getCachedPrices } from './services/stockService';
 import { attachOrderFanout } from './realtime/orderFanout';
+import { startupLog } from './startupLog';
+import './loadEnv';
 
-startupLog('http: boot — creating Express, HTTP server, Socket.IO');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST'],
-  },
+  cors: { origin: '*' },
 });
+
+startupLog('http: boot — creating Express, HTTP server, Socket.IO');
+
+// Real-time order status fanout
 attachOrderFanout(io);
 
 app.use(cors());
 app.use(express.json());
 
 // Routes
-app.use(
-  rateLimit({
-    keyPrefix: 'rate:global',
-    windowSec: 60,
-    max: 300,
-  })
-);
 app.use('/api/auth', authRoutes);
 app.use('/api', ordersRoutes);
 startupLog('http: routes registered', {
@@ -46,32 +37,21 @@ app.get('/health', (req, res) => {
   res.send('OK');
 });
 
-app.get('/api/stocks', async (req, res) => {
-  try {
-    await ensureRedisConnected();
-    const cached = await redis.get('prices:latest');
-    if (cached) {
-      res.json(JSON.parse(cached));
-      return;
-    }
-  } catch {
-    // ignore; fallback to live fetch
-  }
-
-  const prices = await getStockPrices();
+app.get('/api/stocks', (req, res) => {
+  const prices = getCachedPrices();
   res.json(prices);
 });
 
 // Socket.io connection
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
-  
+
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });
 });
 
-startupLog('http: starting stock poll worker (first Yahoo fetch runs immediately, then every 10s)');
+startupLog('http: starting stock poll worker (first NSE fetch runs immediately, then every 10s)');
 startStockUpdates(io);
 
 const PORT = process.env.PORT || 5001;

@@ -1,5 +1,5 @@
-import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/atoms/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/atoms/tooltip';
 import { useNseMarketSession } from '@/hooks/useNseMarketSession';
 import { NSE_SESSION_TOOLTIP, formatIstBrief } from '@/lib/marketHours';
 import { cn } from '@/lib/utils';

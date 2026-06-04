@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Outlet } from 'react-router-dom';
 
-import { KiteHeader } from '@/components/KiteHeader';
+import { KiteHeader } from '@/components/organisms/KiteHeader';
 import { useLiveStocksQuery } from '@/hooks/useLiveStocksQuery';
 import { pickNifty } from '@/lib/marketDisplay';
 
