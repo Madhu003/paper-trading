@@ -1,9 +1,9 @@
 import './loadEnv';
-import { MongoClient, type Db, type Collection, type ObjectId } from 'mongodb';
-import { mongoHostFromUri, redactMongoUri, startupLog } from './startupLog';
+import { Pool, PoolClient } from 'pg';
+import { startupLog } from './startupLog';
 
 export type UserDoc = {
-  _id?: ObjectId;
+  id?: string;
   username: string;
   email: string;
   password_hash: string;
@@ -12,8 +12,8 @@ export type UserDoc = {
 };
 
 export type PortfolioDoc = {
-  _id?: ObjectId;
-  user_id: ObjectId;
+  id?: string;
+  user_id: string;
   symbol: string;
   quantity: number;
   average_price: number;
@@ -21,8 +21,8 @@ export type PortfolioDoc = {
 };
 
 export type OrderDoc = {
-  _id?: ObjectId;
-  user_id: ObjectId;
+  id?: string;
+  user_id: string;
   symbol: string;
   side: 'BUY' | 'SELL';
   quantity: number;
@@ -35,9 +35,9 @@ export type OrderDoc = {
 };
 
 export type TransactionDoc = {
-  _id?: ObjectId;
-  user_id: ObjectId;
-  order_id?: ObjectId;
+  id?: string;
+  user_id: string;
+  order_id?: string;
   symbol: string;
   side: 'BUY' | 'SELL';
   quantity: number;
@@ -46,72 +46,89 @@ export type TransactionDoc = {
   created_at: Date;
 };
 
-let client: MongoClient | null = null;
-let dbInstance: Db | null = null;
+let pool: Pool | null = null;
 
-export function getMongoClient(): MongoClient {
-  if (!client) {
-    throw new Error('MongoDB client not initialized');
+export function getPool(): Pool {
+  if (!pool) {
+    throw new Error('PostgreSQL pool not initialized');
   }
-  return client;
+  return pool;
 }
 
-export async function connectMongo(): Promise<Db> {
-  if (dbInstance) {
-    startupLog('mongo: reuse existing connection', { db: dbInstance.databaseName });
-    return dbInstance;
+export async function connectPg(): Promise<Pool> {
+  if (pool) {
+    startupLog('pg: reuse existing connection pool');
+    return pool;
   }
 
-  const uri = process.env.MONGODB_URI?.trim() ?? '';
-  if (!uri) {
-    throw new Error('MONGODB_URI is required');
+  const connectionString = process.env.DATABASE_URL?.trim() ?? '';
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is required');
   }
 
-  const dbName = process.env.MONGODB_DB?.trim() || 'paper_trading';
-  startupLog('mongo: connecting', {
-    host: mongoHostFromUri(uri),
-    uriRedacted: redactMongoUri(uri),
-    dbName,
-  });
+  startupLog('pg: connecting', { url: connectionString.split('@')[1] || 'hidden' });
 
   const t0 = Date.now();
-  client = new MongoClient(uri);
-  await client.connect();
-  startupLog('mongo: TCP + handshake OK', { ms: Date.now() - t0 });
+  pool = new Pool({
+    connectionString,
+    ssl: { rejectUnauthorized: false }
+  });
 
-  dbInstance = client.db(dbName);
-  startupLog('mongo: using database', { dbName });
+  // Verify connection
+  const client = await pool.connect();
+  startupLog('pg: TCP + handshake OK', { ms: Date.now() - t0 });
 
-  const users = dbInstance.collection<UserDoc>('users');
-  startupLog('mongo: index users.email (unique)');
-  await users.createIndex({ email: 1 }, { unique: true });
-  startupLog('mongo: index users.username (unique)');
-  await users.createIndex({ username: 1 }, { unique: true });
+  // Initialize schema
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      username VARCHAR(255) UNIQUE NOT NULL,
+      email VARCHAR(255) UNIQUE NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      balance NUMERIC NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
 
-  const portfolio = dbInstance.collection<PortfolioDoc>('portfolio');
-  startupLog('mongo: index portfolio (user_id, symbol unique)');
-  await portfolio.createIndex({ user_id: 1, symbol: 1 }, { unique: true });
+    CREATE TABLE IF NOT EXISTS portfolio (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      symbol VARCHAR(255) NOT NULL,
+      quantity NUMERIC NOT NULL,
+      average_price NUMERIC NOT NULL,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, symbol)
+    );
 
-  const orders = dbInstance.collection<OrderDoc>('orders');
-  startupLog('mongo: index orders (user_id, created_at)');
-  await orders.createIndex({ user_id: 1, created_at: -1 });
+    CREATE TABLE IF NOT EXISTS orders (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      symbol VARCHAR(255) NOT NULL,
+      side VARCHAR(10) NOT NULL CHECK (side IN ('BUY', 'SELL')),
+      quantity NUMERIC NOT NULL,
+      status VARCHAR(20) NOT NULL CHECK (status IN ('PENDING', 'EXECUTED', 'REJECTED')),
+      executed_price NUMERIC NOT NULL,
+      total NUMERIC NOT NULL,
+      error_message TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_orders_user_id_created_at ON orders(user_id, created_at DESC);
 
-  const transactions = dbInstance.collection<TransactionDoc>('transactions');
-  startupLog('mongo: index transactions (user_id, created_at)');
-  await transactions.createIndex({ user_id: 1, created_at: -1 });
+    CREATE TABLE IF NOT EXISTS transactions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      order_id UUID REFERENCES orders(id) ON DELETE SET NULL,
+      symbol VARCHAR(255) NOT NULL,
+      side VARCHAR(10) NOT NULL CHECK (side IN ('BUY', 'SELL')),
+      quantity NUMERIC NOT NULL,
+      price NUMERIC NOT NULL,
+      total NUMERIC NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_transactions_user_id_created_at ON transactions(user_id, created_at DESC);
+  `);
 
-  startupLog('mongo: connect + indexes complete', { dbName, totalMs: Date.now() - t0 });
-  return dbInstance;
-}
-
-export function getDb(): Db {
-  if (!dbInstance) {
-    throw new Error('MongoDB not connected; call connectMongo() first');
-  }
-  return dbInstance;
-}
-
-export async function getUsersCollection(): Promise<Collection<UserDoc>> {
-  const db = await connectMongo();
-  return db.collection<UserDoc>('users');
+  client.release();
+  startupLog('pg: connect + schema initialization complete', { totalMs: Date.now() - t0 });
+  return pool;
 }

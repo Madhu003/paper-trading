@@ -2,7 +2,7 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import { connectMongo } from './db';
+import { connectPg } from './db';
 import authRoutes from './routes/auth';
 import ordersRoutes from './routes/orders';
 import { startStockUpdates, getCachedPrices } from './services/stockService';
@@ -71,17 +71,18 @@ server.listen(PORT, '0.0.0.0', () => {
   startupLog('http: listening', { PORT, url: `http://0.0.0.0:${PORT}` });
 });
 
-// 2. Connect to MongoDB in the background
-startupLog('http: calling connectMongo() in background');
-connectMongo()
-  .then((db) => {
-    startupLog('http: Mongo ready', { database: db.databaseName, PORT });
+// 2. Connect to PostgreSQL in the background
+startupLog('http: calling connectPg() in background');
+connectPg()
+  .then((pool) => {
+    startupLog('http: Postgres ready', { PORT });
   })
   .catch((err) => {
-    startupLog('http: abort — Mongo connection failed', {
+    startupLog('http: abort — Postgres connection failed', {
       name: err instanceof Error ? err.name : 'Error',
       message: err instanceof Error ? err.message : String(err),
     });
-    console.error('MongoDB connection failed:', err);
+    console.error('Postgres connection failed:', err);
     // Do not process.exit(1) immediately to allow inspection of logs, or let the orchestrator handle it.
   });
+

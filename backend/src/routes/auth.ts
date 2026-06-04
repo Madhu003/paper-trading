@@ -1,8 +1,7 @@
 import express, { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { MongoServerError } from 'mongodb';
-import { getUsersCollection } from '../db';
+import { getPool } from '../db';
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
@@ -12,23 +11,20 @@ router.post('/signup', async (req: Request, res: Response) => {
   const { username, email, password } = req.body;
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    const users = await getUsersCollection();
-    const result = await users.insertOne({
-      username,
-      email,
-      password_hash: hashedPassword,
-      balance: 100_000,
-      created_at: new Date(),
-    });
+    const pool = getPool();
+    const result = await pool.query(
+      'INSERT INTO users (username, email, password_hash, balance, created_at) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP) RETURNING id',
+      [username, email, hashedPassword, 100000]
+    );
     const user = {
-      id: result.insertedId.toString(),
+      id: result.rows[0].id,
       username,
       email,
     };
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '24h' });
     res.status(201).json({ user, token });
-  } catch (err) {
-    if (err instanceof MongoServerError && err.code === 11000) {
+  } catch (err: any) {
+    if (err.code === '23505') { // Postgres unique violation
       res.status(409).json({ error: 'Email or username already taken' });
       return;
     }
@@ -41,17 +37,18 @@ router.post('/signup', async (req: Request, res: Response) => {
 router.post('/signin', async (req: Request, res: Response) => {
   const { email, password } = req.body;
   try {
-    const users = await getUsersCollection();
-    const user = await users.findOne({ email });
+    const pool = getPool();
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const user = result.rows[0];
     if (user && (await bcrypt.compare(password, user.password_hash))) {
-      const id = user._id!.toString();
+      const id = user.id;
       const token = jwt.sign({ userId: id }, JWT_SECRET, { expiresIn: '24h' });
       res.json({
         user: {
           id,
           username: user.username,
           email: user.email,
-          balance: user.balance,
+          balance: Number(user.balance), // pg returns NUMERIC as string
         },
         token,
       });

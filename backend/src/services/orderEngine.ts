@@ -1,11 +1,5 @@
-import { ObjectId, type ClientSession } from 'mongodb';
-import {
-  getDb,
-  getMongoClient,
-  type OrderDoc,
-  type PortfolioDoc,
-  type TransactionDoc,
-} from '../db';
+import { getPool } from '../db';
+import { PoolClient } from 'pg';
 import { notifyOrdersChanged } from '../realtime/orderFanout';
 import { getExecutionPrice, normalizeSymbol } from './priceService';
 
@@ -33,50 +27,28 @@ function randomSettleMs(): number {
 }
 
 async function insertRejectedOrder(
-  session: ClientSession | undefined,
-  userId: ObjectId,
+  client: PoolClient,
+  userId: string,
   symbol: string,
   side: 'BUY' | 'SELL',
   quantity: number,
   message: string,
-  existingOrderId?: ObjectId,
+  existingOrderId?: string,
 ) {
-  const db = getDb();
-  const now = new Date();
   if (existingOrderId) {
-    await db.collection<OrderDoc>('orders').updateOne(
-      { _id: existingOrderId },
-      {
-        $set: {
-          status: 'REJECTED',
-          executed_price: 0,
-          total: 0,
-          error_message: message,
-          executed_at: now,
-        },
-      },
-      { session },
+    await client.query(
+      `UPDATE orders SET status = 'REJECTED', executed_price = 0, total = 0, error_message = $1, executed_at = CURRENT_TIMESTAMP WHERE id = $2`,
+      [message, existingOrderId]
     );
   } else {
-    await db.collection<OrderDoc>('orders').insertOne(
-      {
-        user_id: userId,
-        symbol,
-        side,
-        quantity,
-        status: 'REJECTED',
-        executed_price: 0,
-        total: 0,
-        error_message: message,
-        created_at: now,
-        executed_at: now,
-      },
-      { session },
+    await client.query(
+      `INSERT INTO orders (user_id, symbol, side, quantity, status, executed_price, total, error_message, created_at, executed_at) VALUES ($1, $2, $3, $4, 'REJECTED', 0, 0, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [userId, symbol, side, quantity, message]
     );
   }
 }
 
-type FillMode = { type: 'insert' } | { type: 'fulfill'; orderId: ObjectId };
+type FillMode = { type: 'insert' } | { type: 'fulfill'; orderId: string };
 
 /**
  * Immediate market fill (used by seed and by delayed fulfillment).
@@ -88,13 +60,7 @@ async function fillMarketOrder(input: PlaceOrderInput, mode: FillMode): Promise<
     return { ok: false, error: 'Invalid quantity' };
   }
 
-  let userId: ObjectId;
-  try {
-    userId = new ObjectId(input.userId);
-  } catch {
-    return { ok: false, error: 'Invalid user' };
-  }
-
+  const userId = input.userId;
   const symbol = normalizeSymbol(input.symbol);
   const price = await getExecutionPrice(symbol);
   if (price === null) {
@@ -102,214 +68,130 @@ async function fillMarketOrder(input: PlaceOrderInput, mode: FillMode): Promise<
   }
 
   const total = roundMoney(price * qty);
-  const mongo = getMongoClient();
-  const session = mongo.startSession();
+  const pool = getPool();
+  const client = await pool.connect();
 
   try {
     let result: PlaceOrderResult = { ok: false, error: 'Unknown error' };
 
-    await session.withTransaction(async () => {
-      const db = getDb();
-      const users = db.collection('users');
-      const portfolioCol = db.collection<PortfolioDoc>('portfolio');
-      const ordersCol = db.collection<OrderDoc>('orders');
-      const txCol = db.collection<TransactionDoc>('transactions');
+    await client.query('BEGIN');
 
-      if (mode.type === 'fulfill') {
-        const pending = await ordersCol.findOne({ _id: mode.orderId, user_id: userId }, { session });
-        if (!pending || pending.status !== 'PENDING') {
-          result = { ok: false, error: 'Order not pending' };
-          return;
-        }
-        if (pending.symbol !== symbol || pending.side !== input.side || pending.quantity !== qty) {
-          result = { ok: false, error: 'Order mismatch' };
-          return;
-        }
+    if (mode.type === 'fulfill') {
+      const res = await client.query('SELECT * FROM orders WHERE id = $1 AND user_id = $2 FOR UPDATE', [mode.orderId, userId]);
+      const pending = res.rows[0];
+      if (!pending || pending.status !== 'PENDING') {
+        await client.query('ROLLBACK');
+        return { ok: false, error: 'Order not pending' };
+      }
+      if (pending.symbol !== symbol || pending.side !== input.side || Number(pending.quantity) !== qty) {
+        await client.query('ROLLBACK');
+        return { ok: false, error: 'Order mismatch' };
+      }
+    }
+
+    if (input.side === 'BUY') {
+      const balUpd = await client.query(
+        'UPDATE users SET balance = balance - $1 WHERE id = $2 AND balance >= $1 RETURNING id',
+        [total, userId]
+      );
+      if (balUpd.rowCount !== 1) {
+        await insertRejectedOrder(client, userId, symbol, input.side, qty, 'Insufficient balance', mode.type === 'fulfill' ? mode.orderId : undefined);
+        await client.query('COMMIT');
+        return { ok: false, error: 'Insufficient balance' };
       }
 
-      if (input.side === 'BUY') {
-        const balUpd = await users.updateOne(
-          { _id: userId, balance: { $gte: total } },
-          { $inc: { balance: -total } },
-          { session },
+      const res = await client.query('SELECT * FROM portfolio WHERE user_id = $1 AND symbol = $2', [userId, symbol]);
+      const existing = res.rows[0];
+      
+      if (!existing) {
+        await client.query(
+          'INSERT INTO portfolio (user_id, symbol, quantity, average_price, updated_at) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)',
+          [userId, symbol, qty, price]
         );
-        if (balUpd.modifiedCount !== 1) {
-          await insertRejectedOrder(
-            session,
-            userId,
-            symbol,
-            input.side,
-            qty,
-            'Insufficient balance',
-            mode.type === 'fulfill' ? mode.orderId : undefined,
-          );
-          result = { ok: false, error: 'Insufficient balance' };
-          return;
-        }
-
-        const existing = await portfolioCol.findOne({ user_id: userId, symbol }, { session });
-        const now = new Date();
-        if (!existing) {
-          await portfolioCol.insertOne(
-            {
-              user_id: userId,
-              symbol,
-              quantity: qty,
-              average_price: price,
-              updated_at: now,
-            },
-            { session },
-          );
-        } else {
-          const newQty = existing.quantity + qty;
-          const newAvg = roundMoney(
-            (existing.quantity * existing.average_price + qty * price) / newQty,
-          );
-          await portfolioCol.updateOne(
-            { user_id: userId, symbol },
-            { $set: { quantity: newQty, average_price: newAvg, updated_at: now } },
-            { session },
-          );
-        }
-
-        let orderIdStr: string;
-        if (mode.type === 'insert') {
-          const orderIns = await ordersCol.insertOne(
-            {
-              user_id: userId,
-              symbol,
-              side: 'BUY',
-              quantity: qty,
-              status: 'EXECUTED',
-              executed_price: price,
-              total,
-              created_at: now,
-              executed_at: now,
-            },
-            { session },
-          );
-          orderIdStr = orderIns.insertedId.toString();
-        } else {
-          await ordersCol.updateOne(
-            { _id: mode.orderId },
-            {
-              $set: {
-                status: 'EXECUTED',
-                executed_price: price,
-                total,
-                executed_at: now,
-                error_message: undefined,
-              },
-            },
-            { session },
-          );
-          orderIdStr = mode.orderId.toString();
-        }
-
-        const oid = mode.type === 'insert' ? new ObjectId(orderIdStr) : mode.orderId;
-        await txCol.insertOne(
-          {
-            user_id: userId,
-            order_id: oid,
-            symbol,
-            side: 'BUY',
-            quantity: qty,
-            price,
-            total,
-            created_at: now,
-          },
-          { session },
-        );
-
-        result = { ok: true, orderId: orderIdStr, executedPrice: price, total };
-        return;
-      }
-
-      // SELL
-      const existing = await portfolioCol.findOne({ user_id: userId, symbol }, { session });
-      if (!existing || existing.quantity < qty) {
-        await insertRejectedOrder(
-          session,
-          userId,
-          symbol,
-          input.side,
-          qty,
-          'Insufficient shares',
-          mode.type === 'fulfill' ? mode.orderId : undefined,
-        );
-        result = { ok: false, error: 'Insufficient shares' };
-        return;
-      }
-
-      const now = new Date();
-      await users.updateOne({ _id: userId }, { $inc: { balance: total } }, { session });
-
-      const newQty = existing.quantity - qty;
-      if (newQty === 0) {
-        await portfolioCol.deleteOne({ user_id: userId, symbol }, { session });
       } else {
-        await portfolioCol.updateOne(
-          { user_id: userId, symbol },
-          { $set: { quantity: newQty, updated_at: now } },
-          { session },
+        const existingQty = Number(existing.quantity);
+        const existingAvg = Number(existing.average_price);
+        const newQty = existingQty + qty;
+        const newAvg = roundMoney((existingQty * existingAvg + qty * price) / newQty);
+        await client.query(
+          'UPDATE portfolio SET quantity = $1, average_price = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+          [newQty, newAvg, existing.id]
         );
       }
 
       let orderIdStr: string;
       if (mode.type === 'insert') {
-        const orderIns = await ordersCol.insertOne(
-          {
-            user_id: userId,
-            symbol,
-            side: 'SELL',
-            quantity: qty,
-            status: 'EXECUTED',
-            executed_price: price,
-            total,
-            created_at: now,
-            executed_at: now,
-          },
-          { session },
+        const orderIns = await client.query(
+          `INSERT INTO orders (user_id, symbol, side, quantity, status, executed_price, total, created_at, executed_at) VALUES ($1, $2, 'BUY', $3, 'EXECUTED', $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id`,
+          [userId, symbol, qty, price, total]
         );
-        orderIdStr = orderIns.insertedId.toString();
+        orderIdStr = orderIns.rows[0].id;
       } else {
-        await ordersCol.updateOne(
-          { _id: mode.orderId },
-          {
-            $set: {
-              status: 'EXECUTED',
-              executed_price: price,
-              total,
-              executed_at: now,
-              error_message: undefined,
-            },
-          },
-          { session },
+        await client.query(
+          `UPDATE orders SET status = 'EXECUTED', executed_price = $1, total = $2, executed_at = CURRENT_TIMESTAMP, error_message = NULL WHERE id = $3`,
+          [price, total, mode.orderId]
         );
-        orderIdStr = mode.orderId.toString();
+        orderIdStr = mode.orderId;
       }
 
-      const oid = mode.type === 'insert' ? new ObjectId(orderIdStr) : mode.orderId;
-      await txCol.insertOne(
-        {
-          user_id: userId,
-          order_id: oid,
-          symbol,
-          side: 'SELL',
-          quantity: qty,
-          price,
-          total,
-          created_at: now,
-        },
-        { session },
+      await client.query(
+        `INSERT INTO transactions (user_id, order_id, symbol, side, quantity, price, total, created_at) VALUES ($1, $2, $3, 'BUY', $4, $5, $6, CURRENT_TIMESTAMP)`,
+        [userId, orderIdStr, symbol, qty, price, total]
       );
 
       result = { ok: true, orderId: orderIdStr, executedPrice: price, total };
-    });
+    } else { // SELL
+      const res = await client.query('SELECT * FROM portfolio WHERE user_id = $1 AND symbol = $2', [userId, symbol]);
+      const existing = res.rows[0];
+      
+      if (!existing || Number(existing.quantity) < qty) {
+        await insertRejectedOrder(client, userId, symbol, input.side, qty, 'Insufficient shares', mode.type === 'fulfill' ? mode.orderId : undefined);
+        await client.query('COMMIT');
+        return { ok: false, error: 'Insufficient shares' };
+      }
 
+      await client.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [total, userId]);
+
+      const newQty = Number(existing.quantity) - qty;
+      if (newQty === 0) {
+        await client.query('DELETE FROM portfolio WHERE id = $1', [existing.id]);
+      } else {
+        await client.query(
+          'UPDATE portfolio SET quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          [newQty, existing.id]
+        );
+      }
+
+      let orderIdStr: string;
+      if (mode.type === 'insert') {
+        const orderIns = await client.query(
+          `INSERT INTO orders (user_id, symbol, side, quantity, status, executed_price, total, created_at, executed_at) VALUES ($1, $2, 'SELL', $3, 'EXECUTED', $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id`,
+          [userId, symbol, qty, price, total]
+        );
+        orderIdStr = orderIns.rows[0].id;
+      } else {
+        await client.query(
+          `UPDATE orders SET status = 'EXECUTED', executed_price = $1, total = $2, executed_at = CURRENT_TIMESTAMP, error_message = NULL WHERE id = $3`,
+          [price, total, mode.orderId]
+        );
+        orderIdStr = mode.orderId;
+      }
+
+      await client.query(
+        `INSERT INTO transactions (user_id, order_id, symbol, side, quantity, price, total, created_at) VALUES ($1, $2, $3, 'SELL', $4, $5, $6, CURRENT_TIMESTAMP)`,
+        [userId, orderIdStr, symbol, qty, price, total]
+      );
+
+      result = { ok: true, orderId: orderIdStr, executedPrice: price, total };
+    }
+
+    await client.query('COMMIT');
     return result;
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
   } finally {
-    await session.endSession();
+    client.release();
   }
 }
 
@@ -318,59 +200,40 @@ export async function placeMarketOrder(input: PlaceOrderInput): Promise<PlaceOrd
   return fillMarketOrder(input, { type: 'insert' });
 }
 
-async function fulfillPendingOrder(orderId: ObjectId, userIdStr: string): Promise<void> {
-  const db = getDb();
-  const order = await db.collection<OrderDoc>('orders').findOne({ _id: orderId });
+async function fulfillPendingOrder(orderId: string, userIdStr: string): Promise<void> {
+  const pool = getPool();
+  const res = await pool.query('SELECT * FROM orders WHERE id = $1', [orderId]);
+  const order = res.rows[0];
   if (!order || order.status !== 'PENDING') return;
-
-  const uid = order.user_id.toString();
 
   const input: PlaceOrderInput = {
     userId: userIdStr,
     symbol: order.symbol,
     side: order.side,
-    quantity: order.quantity,
+    quantity: Number(order.quantity),
   };
 
   const price = await getExecutionPrice(normalizeSymbol(order.symbol));
   if (price === null) {
-    const now = new Date();
-    await db.collection<OrderDoc>('orders').updateOne(
-      { _id: orderId },
-      {
-        $set: {
-          status: 'REJECTED',
-          error_message: 'Price unavailable at settlement',
-          executed_at: now,
-          executed_price: 0,
-          total: 0,
-        },
-      },
+    await pool.query(
+      `UPDATE orders SET status = 'REJECTED', error_message = 'Price unavailable at settlement', executed_at = CURRENT_TIMESTAMP, executed_price = 0, total = 0 WHERE id = $1`,
+      [orderId]
     );
-    notifyOrdersChanged(uid);
+    notifyOrdersChanged(userIdStr);
     return;
   }
 
   const result = await fillMarketOrder(input, { type: 'fulfill', orderId });
   if (!result.ok) {
     if (result.error === 'Could not resolve market price for symbol') {
-      const now = new Date();
-      await db.collection<OrderDoc>('orders').updateOne(
-        { _id: orderId, status: 'PENDING' },
-        {
-          $set: {
-            status: 'REJECTED',
-            error_message: result.error,
-            executed_at: now,
-            executed_price: 0,
-            total: 0,
-          },
-        },
+      await pool.query(
+        `UPDATE orders SET status = 'REJECTED', error_message = $1, executed_at = CURRENT_TIMESTAMP, executed_price = 0, total = 0 WHERE id = $2 AND status = 'PENDING'`,
+        [result.error, orderId]
       );
     }
   }
 
-  notifyOrdersChanged(uid);
+  notifyOrdersChanged(userIdStr);
 }
 
 /**
@@ -382,13 +245,7 @@ export async function enqueueMarketOrder(input: PlaceOrderInput): Promise<Enqueu
     return { ok: false, error: 'Invalid quantity' };
   }
 
-  let userId: ObjectId;
-  try {
-    userId = new ObjectId(input.userId);
-  } catch {
-    return { ok: false, error: 'Invalid user' };
-  }
-
+  const userId = input.userId;
   const symbol = normalizeSymbol(input.symbol);
   const price = await getExecutionPrice(symbol);
   if (price === null) {
@@ -396,41 +253,35 @@ export async function enqueueMarketOrder(input: PlaceOrderInput): Promise<Enqueu
   }
 
   const total = roundMoney(price * qty);
-  const db = getDb();
-  const users = await db.collection('users').findOne({ _id: userId });
-  if (!users) return { ok: false, error: 'User not found' };
+  const pool = getPool();
+  
+  const userRes = await pool.query('SELECT balance FROM users WHERE id = $1', [userId]);
+  const user = userRes.rows[0];
+  if (!user) return { ok: false, error: 'User not found' };
 
-  if (input.side === 'BUY' && users.balance < total) {
+  if (input.side === 'BUY' && Number(user.balance) < total) {
     return { ok: false, error: 'Insufficient balance' };
   }
 
   if (input.side === 'SELL') {
-    const row = await db.collection<PortfolioDoc>('portfolio').findOne({ user_id: userId, symbol });
-    if (!row || row.quantity < qty) {
+    const rowRes = await pool.query('SELECT quantity FROM portfolio WHERE user_id = $1 AND symbol = $2', [userId, symbol]);
+    const row = rowRes.rows[0];
+    if (!row || Number(row.quantity) < qty) {
       return { ok: false, error: 'Insufficient shares' };
     }
   }
 
-  const now = new Date();
-  const ins = await db.collection<OrderDoc>('orders').insertOne({
-    user_id: userId,
-    symbol,
-    side: input.side,
-    quantity: qty,
-    status: 'PENDING',
-    executed_price: 0,
-    total: 0,
-    created_at: now,
-    executed_at: now,
-  });
+  const ins = await pool.query(
+    `INSERT INTO orders (user_id, symbol, side, quantity, status, executed_price, total, created_at, executed_at) VALUES ($1, $2, $3, $4, 'PENDING', 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id`,
+    [userId, symbol, input.side, qty]
+  );
 
   const settleInMs = randomSettleMs();
-  const orderId = ins.insertedId;
-  const uid = input.userId;
+  const orderId = ins.rows[0].id;
 
   setTimeout(() => {
-    void fulfillPendingOrder(orderId, uid);
+    void fulfillPendingOrder(orderId, userId);
   }, settleInMs);
 
-  return { ok: true, orderId: orderId.toString(), status: 'PENDING', settleInMs };
+  return { ok: true, orderId: orderId, status: 'PENDING', settleInMs };
 }
