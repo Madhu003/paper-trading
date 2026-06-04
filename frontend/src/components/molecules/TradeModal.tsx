@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, ShoppingCart, TrendingUp, Wallet, AlertCircle } from 'lucide-react';
+import { X, ShoppingCart, Wallet, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
-import { Badge } from '@/components/atoms/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/atoms/card';
 import { symbolShort } from '@/lib/marketDisplay';
 import { formatInr } from '@/lib/format';

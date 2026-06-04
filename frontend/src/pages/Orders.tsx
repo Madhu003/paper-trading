@@ -1,13 +1,12 @@
 import { useState, type FormEvent, useMemo } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { ShoppingCart, ListChecks, History, Search, ArrowRight, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { ShoppingCart, ListChecks, History, Search, Clock, CheckCircle2, XCircle } from 'lucide-react';
 
 import { Button } from '@/components/atoms/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
 import { Input } from '@/components/atoms/input';
 import { Badge } from '@/components/atoms/badge';
-import { useMeQuery } from '@/hooks/useMeQuery';
 import { useOrdersQuery } from '@/hooks/useOrdersQuery';
 import { usePlaceOrderMutation } from '@/hooks/usePlaceOrderMutation';
 import { getApiErrorMessage } from '@/lib/apiError';
@@ -22,7 +21,6 @@ export function Orders() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const ordersQuery = useOrdersQuery();
-  const meQuery = useMeQuery();
   const placeMut = usePlaceOrderMutation();
 
   const sortedOrders = useMemo(() => {
@@ -135,7 +133,12 @@ export function Orders() {
                   />
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-2 space-y-4">
+                  {formError && (
+                    <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs font-bold text-destructive">
+                      {formError}
+                    </div>
+                  )}
                   <Button 
                     type="submit" 
                     className={cn(

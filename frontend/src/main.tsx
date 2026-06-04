@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/atoms/tooltip';
 import { ThemeProvider } from '@/components/theme-provider';
 import { setAuthToken } from '@/api/client';
+import '@/lib/firebase';
 import './index.css';
 import App from './App.tsx';
 

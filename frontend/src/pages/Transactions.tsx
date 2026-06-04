@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { ArrowDownLeft, ArrowUpRight, History, Search } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/atoms/card';
 import { Badge } from '@/components/atoms/badge';
 import { Input } from '@/components/atoms/input';
 import { useTransactionsQuery } from '@/hooks/useTransactionsQuery';
@@ -63,7 +63,7 @@ export function Transactions() {
               {sortedTransactions.map((tx) => {
                 const isBuy = tx.side === 'BUY';
                 return (
-                  <div key={tx._id} className="p-4 hover:bg-muted/30 transition-colors flex items-center justify-between gap-4">
+                  <div key={tx.id} className="p-4 hover:bg-muted/30 transition-colors flex items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                       <div className={cn(
                         "size-10 rounded-full flex items-center justify-center",

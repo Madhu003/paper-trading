@@ -85,6 +85,9 @@ export function KiteHeader({ nifty }: Props) {
           </div>
           
           <div className="flex items-center gap-2 border-l pl-4">
+            <Badge variant="outline" className="hidden lg:inline-flex text-[10px] font-black uppercase tracking-tighter opacity-50">
+              Live: {status}
+            </Badge>
             <ThemeToggle />
             <Button
               type="button"

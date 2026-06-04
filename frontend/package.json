@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "npm run build && firebase deploy --only hosting"
   },
   "dependencies": {
     "@radix-ui/react-navigation-menu": "^1.2.14",
@@ -19,6 +20,7 @@
     "axios": "^1.15.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "firebase": "^12.14.0",
     "highcharts": "^12.6.0",
     "highcharts-react-official": "^3.2.3",
     "lucide-react": "^1.14.0",

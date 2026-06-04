@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
 import { useOutletContext } from 'react-router-dom';
-import { Briefcase, Clock, Droplets, TrendingUp, TrendingDown, Wallet, Newspaper, ArrowUpRight } from 'lucide-react';
+import { Briefcase, Clock, TrendingUp, TrendingDown, Wallet, Newspaper, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
@@ -283,31 +283,21 @@ export function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm bg-background overflow-hidden flex flex-col">
+          <Card className="border-none shadow-sm bg-background overflow-hidden">
             <CardHeader className="border-b bg-muted/30 pb-4">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-bold flex items-center gap-2">
-                  <Newspaper className="size-4 text-primary" />
-                  Market News
-                </CardTitle>
-                <Badge variant="outline" className="text-[10px] font-bold">LIVE</Badge>
-              </div>
+              <CardTitle className="text-base font-bold">Market Depth</CardTitle>
+              <CardDescription className="text-xs font-medium text-muted-foreground">
+                Top 10 stocks by current price
+              </CardDescription>
             </CardHeader>
-            <CardContent className="p-0 flex-1">
-              <div className="divide-y divide-muted/50">
-                {MOCK_NEWS.map(news => (
-                  <div key={news.id} className="p-4 hover:bg-muted/30 transition-colors cursor-pointer group">
-                    <div className="flex justify-between items-start gap-4">
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-primary uppercase tracking-wider">{news.category}</span>
-                        <h3 className="text-sm font-semibold group-hover:text-primary transition-colors line-clamp-2">{news.title}</h3>
-                        <p className="text-[10px] text-muted-foreground font-medium">{news.time}</p>
-                      </div>
-                      <ArrowUpRight className="size-4 text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0" />
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <CardContent className="pt-6">
+              {stocksQuery.isLoading ? (
+                <div className="h-[240px] flex items-center justify-center">
+                  <span className="text-sm text-muted-foreground animate-pulse font-medium">Fetching market depth…</span>
+                </div>
+              ) : (
+                <HighchartsReact highcharts={Highcharts} options={top10BarOptions} />
+              )}
             </CardContent>
           </Card>
         </div>
@@ -361,27 +351,27 @@ export function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm bg-background overflow-hidden">
+          <Card className="border-none shadow-sm bg-background overflow-hidden flex flex-col">
             <CardHeader className="border-b bg-muted/30 pb-4">
-              <CardTitle className="text-base font-bold">Top Picks</CardTitle>
-              <CardDescription className="text-xs font-medium text-muted-foreground">
-                Current price leaderboard
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <Newspaper className="size-4 text-primary" />
+                  Market News
+                </CardTitle>
+                <Badge variant="outline" className="text-[10px] font-bold">LIVE</Badge>
+              </div>
             </CardHeader>
-            <CardContent className="p-0">
-               <div className="divide-y divide-muted/50">
-                {top20.slice(0, 5).map(s => (
-                  <div 
-                    key={s.symbol} 
-                    className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors cursor-pointer group"
-                    onClick={() => handleStockClick(s)}
-                  >
-                    <span className="text-sm font-bold group-hover:text-primary transition-colors">{symbolShort(s.symbol)}</span>
-                    <div className="text-right">
-                      <p className="text-sm font-bold tabular-nums">{s.price?.toFixed(2)}</p>
-                      <p className={cn("text-[10px] font-bold", (s.change ?? 0) >= 0 ? "text-profit" : "text-loss")}>
-                        {(s.change ?? 0) >= 0 ? '+' : ''}{s.change?.toFixed(2)}%
-                      </p>
+            <CardContent className="p-0 flex-1">
+              <div className="divide-y divide-muted/50">
+                {MOCK_NEWS.map(news => (
+                  <div key={news.id} className="p-4 hover:bg-muted/30 transition-colors cursor-pointer group">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-primary uppercase tracking-wider">{news.category}</span>
+                        <h3 className="text-sm font-semibold group-hover:text-primary transition-colors line-clamp-2">{news.title}</h3>
+                        <p className="text-[10px] text-muted-foreground font-medium">{news.time}</p>
+                      </div>
+                      <ArrowUpRight className="size-4 text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0" />
                     </div>
                   </div>
                 ))}

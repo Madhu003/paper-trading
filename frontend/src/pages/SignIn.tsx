@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { LogIn, UserPlus, ArrowRight, TrendingUp, Briefcase } from 'lucide-react';
+import { LogIn, UserPlus, TrendingUp, Briefcase } from 'lucide-react';
 
 import { Button } from '@/components/atoms/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';

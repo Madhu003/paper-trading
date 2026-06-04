@@ -3,7 +3,6 @@ import { Link, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
 import { LayoutGrid, TrendingUp, TrendingDown, ArrowRight, MousePointer2 } from 'lucide-react';
 
-import { Badge } from '@/components/atoms/badge';
 import { Button } from '@/components/atoms/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
 import { TradeModal } from '@/components/molecules/TradeModal';
