@@ -11,6 +11,7 @@ export function useMeQuery(options?: Options) {
   return useQuery({
     queryKey: queryKeys.me,
     queryFn: getMe,
+    refetchInterval: 30_000,
     ...(options?.staleTime !== undefined ? { staleTime: options.staleTime } : {}),
   });
 }

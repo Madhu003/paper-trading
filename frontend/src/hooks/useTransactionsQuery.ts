@@ -7,5 +7,6 @@ export function useTransactionsQuery() {
   return useQuery({
     queryKey: queryKeys.transactions,
     queryFn: getTransactions,
+    refetchInterval: 60_000,
   });
 }

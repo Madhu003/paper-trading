@@ -11,12 +11,18 @@ function bindLifecycle(s: Socket): void {
   lifecycleBound = true;
   s.on('connect', () => setSocketConnectionStatus('live'));
   s.on('disconnect', () => setSocketConnectionStatus('offline'));
+  s.on('reconnecting', () => setSocketConnectionStatus('connecting'));
+  s.on('reconnect', () => setSocketConnectionStatus('live'));
 }
 
 export function getSocket(): Socket {
   if (socket) return socket;
   socket = io(API_URL, {
     transports: ['websocket'],
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 10_000,
+    reconnectionAttempts: Infinity,
   });
   bindLifecycle(socket);
   setSocketConnectionStatus(socket.connected ? 'live' : 'connecting');

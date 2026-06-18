@@ -56,6 +56,12 @@ app.get('/api/news', async (req, res) => {
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
+  // Push the current price snapshot immediately so the client doesn't wait for the next poll tick
+  const snapshot = getCachedPrices();
+  if (snapshot.length > 0) {
+    socket.emit('stockUpdates', snapshot);
+  }
+
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });

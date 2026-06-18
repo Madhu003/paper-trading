@@ -11,6 +11,7 @@ export function usePortfolioQuery(options?: Options) {
   return useQuery({
     queryKey: queryKeys.portfolio,
     queryFn: getPortfolio,
+    refetchInterval: 30_000,
     ...(options?.staleTime !== undefined ? { staleTime: options.staleTime } : {}),
   });
 }

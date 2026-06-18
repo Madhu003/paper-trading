@@ -3,6 +3,7 @@ import { getPool } from '../db';
 import type { AuthedRequest } from '../middleware/auth';
 import { requireAuth } from '../middleware/auth';
 import { enqueueMarketOrder } from '../services/orderEngine';
+import { notifyOrdersChanged } from '../realtime/orderFanout';
 
 const router = express.Router();
 
@@ -79,6 +80,8 @@ router.post('/orders', requireAuth, async (req: AuthedRequest, res: Response) =>
       return;
     }
 
+    // Notify all connected sockets so every tab/device shows the PENDING order immediately
+    notifyOrdersChanged(req.userId!);
     res.status(202).json(result);
   } catch (e) {
     console.error(e);
@@ -156,6 +159,8 @@ router.post('/funds/deposit', requireAuth, async (req: AuthedRequest, res: Respo
       res.status(404).json({ error: 'User not found' });
       return;
     }
+    // Push updated balance to all connected sockets for this user
+    notifyOrdersChanged(userId);
     res.status(200).json({ balance: Number(r.rows[0].balance), added: rounded });
   } catch (e) {
     console.error(e);
