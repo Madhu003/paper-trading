@@ -5,12 +5,12 @@ import { initializeApp } from "firebase/app";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyAg6Do5a_R2SeAHBlSpsnC5iJ5ZOecf_1Y",
-  authDomain: "paper-trading-003.firebaseapp.com",
-  projectId: "paper-trading-003",
-  storageBucket: "paper-trading-003.firebasestorage.app",
-  messagingSenderId: "970739449806",
-  appId: "1:970739449806:web:2b8026ab4e4b828034359f"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 // Initialize Firebase
